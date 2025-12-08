@@ -174,42 +174,35 @@
       "region": "US",
       "hidden": false,
       "supportIframe": true,
-      "note": "",
+      "note": "选择器已根据Grok界面DOM结构和动态按钮行为更新",
       "searchHandler": {
         "steps": [
           {
             "action": "focus",
-            "selector": "textarea",
-            "description": "聚焦输入框"
+            "selector": "div.ProseMirror[contenteditable=\"true\"]",
+            "description": "聚焦Grok输入框"
           },
           {
             "action": "setValue",
-            "selector": "textarea",
-            "inputType": "textarea",
-            "description": "设置输入框的值"
+            "selector": "div.ProseMirror[contenteditable=\"true\"]",
+            "inputType": "contenteditable",
+            "description": "设置Grok输入框内容"
           },
           {
             "action": "triggerEvents",
-            "selector": "textarea",
-            "events": ["input"],
-            "description": "触发输入事件"
-          },
-          {
-            "action": "triggerEvents",
-            "selector": "textarea",
-            "events": ["input", "change", "blur", "focus"],
-            "description": "触发完整的输入事件序列"
+            "selector": "div.ProseMirror[contenteditable=\"true\"]",
+            "events": ["input", "change", "blur", "focus", "keyup"],
+            "description": "触发更全面的输入事件，确保UI响应"
           },
           {
             "action": "wait",
-            "duration": 100,
-            "description": "等待100ms"
+            "duration": 500,
+            "description": "等待500ms，让发送按钮从语音状态切换为文本发送状态并启用"
           },
           {
-            "action": "sendKeys",
-            "selector": "textarea",
-            "keys": "Enter",
-            "description": "发送回车键"
+            "action": "click",
+            "selector": "button[type=\"submit\"][aria-label=\"Submit\"]",
+            "description": "点击发送按钮"
           }
         ]
       },
