@@ -752,23 +752,7 @@ function findExistingTab(tabs, targetDomain) {
   });
 } 
 
-function isComparisonPageUrl(url) {
-  return typeof url === 'string' && url.startsWith(COMPARISON_PAGE_URL);
-}
-
-async function findComparisonPageTab(windowId) {
-  const tabs = await chrome.tabs.query({ windowId });
-  return tabs.find((tab) => isComparisonPageUrl(tab.url)) || null;
-}
-
 async function openComparisonPageTab(windowId) {
-  const existingTab = await findComparisonPageTab(windowId);
-
-  if (existingTab) {
-    await chrome.tabs.update(existingTab.id, { active: true });
-    return existingTab;
-  }
-
   return chrome.tabs.create({
     windowId,
     url: getComparisonPageUrl(),

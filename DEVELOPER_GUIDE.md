@@ -16,6 +16,9 @@ For local development, load the unpacked extension from `chrome://extensions/` a
 
 - [Target Browser / 目标浏览器](#target-browser--目标浏览器)
 - [Architecture Overview / 架构概述](#architecture-overview--架构概述)
+- [Chrome Architecture / Chrome 架构](#chrome-architecture--chrome-架构)
+- [Key Chrome APIs / 关键 Chrome API](#key-chrome-apis--关键-chrome-api)
+- [Chrome Runtime Flow / Chrome 运行流程](#chrome-runtime-flow--chrome-运行流程)
 - [Adding New AI Sites / 添加新的 AI 站点](#adding-new-ai-sites--添加新的-ai-站点)
 - [Action Types Reference / 动作类型参考](#action-types-reference--动作类型参考)
 - [Debugging Guide / 调试指南](#debugging-guide--调试指南)
@@ -27,23 +30,71 @@ For local development, load the unpacked extension from `chrome://extensions/` a
 ### Core Components / 核心组件
 
 ```
-AIShortcuts/
+AICompareChrome/
+├── manifest.json               # Chrome Manifest V3 entry / Chrome MV3 清单入口
+├── background.js               # Service worker hub / Service Worker 中枢
 ├── config/
-│   ├── siteHandlers.json    # AI site configurations / AI 站点配置
-│   └── baseConfig.js        # Default site definitions / 默认站点定义
+│   ├── baseConfig.js           # Base and remote config helpers / 基础和远程配置辅助
+│   ├── siteDetector.js         # Site detection logic / 站点识别逻辑
+│   ├── siteHandlers.json       # AI site automation config / AI 站点自动化配置
+│   └── rules.json              # Declarative Net Request rules / DNR 规则
+├── content-scripts/
+│   ├── float-button.js         # Floating quick entry / 浮动快捷入口
+│   ├── selection.js            # Selected-text actions / 划词入口
+│   └── search-engines.js       # Search result integration / 搜索引擎结果页集成
 ├── iframe/
-│   ├── inject.js           # Site automation engine / 站点自动化引擎
-│   └── iframe.js           # Multi-AI interface / 多AI界面
-├── content-scripts/        # Browser integration / 浏览器集成
-└── background.js           # Extension lifecycle / 扩展生命周期
+│   ├── iframe.html             # Comparison tab shell / 对比标签页壳层
+│   ├── iframe.js               # Multi-AI tab orchestration / 多 AI 标签页调度
+│   ├── inject.js               # Site automation runtime / 站点自动化运行时
+│   └── export-responses.js     # Export helpers / 导出辅助
+├── options/
+│   ├── options.html            # Options UI / 设置页面
+│   └── options.js              # Settings persistence / 设置持久化
+└── _locales/                   # I18n resources / 国际化资源
 ```
 
 ### How It Works / 工作原理
 
-1. **Site Detection / 站点检测**: Extension detects AI sites and loads handlers / 扩展检测AI站点并加载处理器
-2. **Message Passing / 消息传递**: Parent window sends queries to iframe / 父窗口向iframe发送查询
-3. **Action Execution / 动作执行**: `inject.js` executes configured automation steps / `inject.js`执行配置的自动化步骤
-4. **DOM Manipulation / DOM操作**: Automated interaction with AI site interfaces / 自动与AI站点界面交互
+1. **Chrome Entry Points / Chrome 入口**: Toolbar icon, shortcut, floating button, selection, context menu, and omnibox all route into the extension / 工具栏图标、快捷键、浮动按钮、划词、右键菜单和 omnibox 都会进入扩展
+2. **Tab-First Surface / 标签页优先界面**: `background.js` opens `iframe/iframe.html` as a normal Chrome tab / `background.js` 以普通 Chrome 标签页方式打开 `iframe/iframe.html`
+3. **Site Split / 站点分流**: Iframe-capable sites stay inside the comparison tab; others open as normal tabs / 支持 iframe 的站点留在对比标签页中，不支持的站点则作为普通标签页打开
+4. **Automation Runtime / 自动化运行时**: `inject.js` executes configured handler steps from `siteHandlers.json` / `inject.js` 根据 `siteHandlers.json` 执行自动化步骤
+5. **Persistence / 持久化**: User settings live in `chrome.storage.sync`, while cached config and runtime data live in `chrome.storage.local` / 用户设置存储在 `chrome.storage.sync`，缓存配置和运行时数据存储在 `chrome.storage.local`
+
+## Chrome Architecture / Chrome 架构
+
+### Layered Design / 分层设计
+
+1. **Entry Layer / 入口层**: `chrome.action`, keyboard shortcuts, floating buttons, selection actions, search engine buttons, context menus, and omnibox suggestions provide multiple Chrome-native entry points / `chrome.action`、快捷键、浮动按钮、划词动作、搜索引擎按钮、右键菜单和 omnibox 建立多个 Chrome 原生入口
+2. **Orchestration Layer / 调度层**: `background.js` is the service worker that receives messages, initializes config, opens tabs, reuses existing tabs, and dispatches site automation / `background.js` 作为 service worker 接收消息、初始化配置、打开或复用标签页，并分发站点自动化逻辑
+3. **Comparison Tab Layer / 对比标签页层**: `iframe/iframe.html` and `iframe/iframe.js` render the unified multi-AI workspace inside a standard Chrome tab / `iframe/iframe.html` 和 `iframe/iframe.js` 在标准 Chrome 标签页内渲染统一的多 AI 工作台
+4. **Automation Layer / 自动化层**: `iframe/inject.js` plus `config/siteHandlers.json` convert a generic query into site-specific DOM operations such as focus, setValue, triggerEvents, paste, click, or Enter / `iframe/inject.js` 配合 `config/siteHandlers.json` 把通用查询转换成各站点特定的 DOM 操作，如 focus、setValue、triggerEvents、paste、click、Enter
+5. **Configuration Layer / 配置层**: `config/` and `options/` manage built-in defaults, remote site config, per-site user settings, and prompt templates / `config/` 与 `options/` 负责管理内置默认值、远程站点配置、站点级用户设置和提示词模板
+
+### Tab-Based Chrome Design / 基于标签页的 Chrome 设计
+
+The current Chrome version uses a standard tab as the primary comparison surface instead of relying on a side panel. This keeps the interaction model consistent for the toolbar icon, shortcut, floating button, and omnibox entry points. / 当前 Chrome 版本使用普通标签页作为主要对比界面，而不是依赖侧边栏，这样工具栏图标、快捷键、浮动按钮和 omnibox 的交互模型保持一致。
+
+## Key Chrome APIs / 关键 Chrome API
+
+- `chrome.action`: Opens the comparison tab from the toolbar icon / 从工具栏图标打开对比标签页
+- `chrome.tabs`: Creates, activates, updates, and reuses Chrome tabs for comparison and non-iframe sites / 创建、激活、更新和复用 Chrome 标签页
+- `chrome.storage.sync`: Stores user preferences such as site settings and prompt templates / 存储站点设置和提示词模板等用户偏好
+- `chrome.storage.local`: Caches remote site config and runtime values / 缓存远程站点配置和运行时数据
+- `chrome.contextMenus`: Adds selected-text search actions / 添加划词右键搜索入口
+- `chrome.declarativeNetRequest`: Applies rule resources for request/response adjustments / 应用请求与响应调整规则
+- `chrome.omnibox`: Supports `ai` keyword entry from the browser address bar / 支持浏览器地址栏 `ai` 关键字入口
+- `chrome.i18n`: Serves localized text from `_locales/` / 从 `_locales/` 提供多语言文案
+
+## Chrome Runtime Flow / Chrome 运行流程
+
+1. **User Trigger / 用户触发**: The user clicks the toolbar icon, presses `Ctrl/⌘+M`, uses the floating button, selects text, chooses the context menu, or types `ai` in the omnibox / 用户点击工具栏图标、按下 `Ctrl/⌘+M`、使用浮动按钮、划词、右键菜单，或在 omnibox 输入 `ai`
+2. **Background Dispatch / 后台分发**: `background.js` receives the message or browser event and decides whether to open the comparison tab, run a single-site search, or open the options page / `background.js` 接收消息或浏览器事件，决定打开对比标签页、执行单站点搜索或打开设置页
+3. **Comparison Tab Boot / 对比页启动**: `iframe/iframe.html` loads and `iframe.js` receives the query and the selected sites / `iframe/iframe.html` 加载后，`iframe.js` 接收查询词和所选站点
+4. **Iframe Group Load / iframe 站点加载**: Sites with `supportIframe: true` are loaded together inside the comparison tab / `supportIframe: true` 的站点会一起加载到对比标签页中
+5. **Normal Tab Fallback / 普通标签页回退**: Sites without iframe support are opened or reused as normal Chrome tabs / 不支持 iframe 的站点会以普通 Chrome 标签页方式打开或复用
+6. **Site Handler Execution / 站点处理执行**: After each target page loads, `inject.js` receives the query and executes the handler steps defined in `siteHandlers.json` / 目标页面加载后，`inject.js` 接收查询并执行 `siteHandlers.json` 中定义的处理步骤
+7. **Settings and State / 设置与状态**: Changes from the options page and runtime updates are persisted through Chrome storage / 设置页修改和运行时更新会通过 Chrome storage 持久化
 
 ## Adding New AI Sites / 添加新的 AI 站点
 
