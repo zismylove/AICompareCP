@@ -56,14 +56,14 @@ async function createFloatButton() {
   // 将关闭按钮添加到按钮中
   button.appendChild(closeBtn);
 
-  // 按钮的点击事件 - 直接打开侧边栏
+  // 按钮的点击事件 - 直接打开对比标签页
   button.addEventListener('click', (e) => {
     e.stopPropagation(); // 阻止事件冒泡，避免触发页面的选择事件
     e.preventDefault();  // 阻止默认行为
     
     if (!hasMoved) {  // 只有在没有拖动的情况下才触发点击事件
-      console.log('浮动按钮点击，发送TOGGLE_SIDE_PANEL消息');
-      chrome.runtime.sendMessage({ type: 'TOGGLE_SIDE_PANEL' }, (response) => {
+      console.log('浮动按钮点击，发送打开对比标签页消息');
+      chrome.runtime.sendMessage({ type: 'OPEN_COMPARISON_TAB' }, (response) => {
         if (chrome.runtime.lastError) {
           console.error('发送消息失败:', chrome.runtime.lastError);
         } else {
@@ -79,7 +79,7 @@ async function createFloatButton() {
   const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
 
   // 设置提示文本
-  const shortcutText = isMac ? '⌘+M 打开侧边栏' : 'Ctrl+M 打开侧边栏';
+  const shortcutText = isMac ? '⌘+M 打开 AI 对比标签页' : 'Ctrl+M 打开 AI 对比标签页';
   // 添加提示框
   button.addEventListener('mouseenter', () => {
     const tooltip = document.createElement('div');
@@ -207,12 +207,12 @@ async function createFloatButton() {
   // 防止拖动时选中文本
   button.addEventListener('selectstart', (e) => e.preventDefault());
 
-  // 添加快捷键监听 - 直接打开侧边栏
+  // 添加快捷键监听 - 直接打开对比标签页
   document.addEventListener('keydown', (e) => {
     // 检查是否按下 Ctrl+M (Windows) 或 Command+M (Mac)
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'm') {
       e.preventDefault(); // 阻止默认行为
-      chrome.runtime.sendMessage({ type: 'TOGGLE_SIDE_PANEL' });
+      chrome.runtime.sendMessage({ type: 'OPEN_COMPARISON_TAB' });
     }
   });
 

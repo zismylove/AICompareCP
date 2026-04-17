@@ -17,12 +17,20 @@
 
 ### How to Use:
 
-😄 Download the extention
+😄 Download the extension
 
-chrome：https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl
+Recommended browser version: Chrome 114+
 
+Chrome Web Store: https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl
 
-edge：https://microsoftedge.microsoft.com/addons/detail/ai-%E4%BB%BB%E6%84%8F%E9%97%A8-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo （This is an old version and not recommended for use. The latest version has not yet been approved.）
+Chrome local development / unpacked:
+
+1. Open `chrome://extensions/`
+2. Enable Developer mode
+3. Click `Load unpacked`
+4. Select this project folder
+
+Edge legacy listing: https://microsoftedge.microsoft.com/addons/detail/ai-%E4%BB%BB%E6%84%8F%E9%97%A8-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo (old listing kept for reference only)
 
 🎉 Pin the extension to the toolbar and click the extension icon.
 Access the Multi-AI collection page, enter a keyword once, and view results from multiple AIs on a single page.
@@ -71,12 +79,20 @@ This project is licensed under the GNU General Public License v3.0.
 
 ### 使用方式
 
-😄下载扩展
+😄 下载扩展
 
-chrome：https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl 
+推荐浏览器版本：Chrome 114+
 
+Chrome 应用商店：https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl 
 
-edge：https://microsoftedge.microsoft.com/addons/detail/ai%E6%AF%94%E4%B8%80%E6%AF%94-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo ( 新版本一直审核不通过，所以版本较老)
+Chrome 本地加载（开发模式）：
+
+1. 打开 `chrome://extensions/`
+2. 开启“开发者模式”
+3. 点击“加载已解压缩的扩展程序”
+4. 选择当前项目目录
+
+Edge 旧版地址（仅历史保留，当前以 Chrome 版为主）：https://microsoftedge.microsoft.com/addons/detail/ai%E6%AF%94%E4%B8%80%E6%AF%94-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo
 
 
 

@@ -1086,16 +1086,6 @@ function createSingleIframe(siteName, url, container, query) {
     </div>
   `;
   
-  // 添加 Chrome 浏览器特征
-  iframe.setAttribute('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36');
-  
-  // 添加其他常见的 Chrome 浏览器头部信息
-  iframe.setAttribute('accept-language', 'zh-CN,zh;q=0.9,en;q=0.8');
-  iframe.setAttribute('sec-ch-ua', '"Chromium";v="122", "Google Chrome";v="122"');
-  iframe.setAttribute('sec-ch-ua-mobile', '?0');
-  iframe.setAttribute('sec-ch-ua-platform', '"Macintosh"');
-  
-  
   // 组装元素
   iframeContainer.appendChild(header);
   iframeContainer.appendChild(iframe);

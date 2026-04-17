@@ -6,8 +6,15 @@ AI比一比 (AI Compare) is a Chrome browser extension that enables users to int
 
 AI比一比是一个 Chrome 浏览器扩展，允许用户在统一界面中同时与多个 AI 网站交互。本指南帮助开发者添加新的 AI 站点并扩展功能。
 
+## Target Browser / 目标浏览器
+
+Primary target browser: Google Chrome 114+ / 主要目标浏览器：Google Chrome 114+
+
+For local development, load the unpacked extension from `chrome://extensions/` and use Chrome as the primary verification environment. / 本地开发时，请从 `chrome://extensions/` 加载未打包扩展，并以 Chrome 作为主要验证环境。
+
 ## Table of Contents / 目录
 
+- [Target Browser / 目标浏览器](#target-browser--目标浏览器)
 - [Architecture Overview / 架构概述](#architecture-overview--架构概述)
 - [Adding New AI Sites / 添加新的 AI 站点](#adding-new-ai-sites--添加新的-ai-站点)
 - [Action Types Reference / 动作类型参考](#action-types-reference--动作类型参考)

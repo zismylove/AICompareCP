@@ -1,18 +1,29 @@
 importScripts('./config/baseConfig.js');     // 加载基础配置（包含开发环境配置）
 
+const COMPARISON_PAGE_PATH = 'iframe/iframe.html';
+const COMPARISON_PAGE_URL = chrome.runtime.getURL(COMPARISON_PAGE_PATH);
+
+function getComparisonPageUrl(query = '') {
+  if (!query) {
+    return COMPARISON_PAGE_URL;
+  }
+
+  return `${COMPARISON_PAGE_URL}?query=${encodeURIComponent(query)}`;
+}
+
 // 开发环境：输出当前扩展ID供search_url使用
 function logExtensionIdForDevelopment() {
   const extensionId = chrome.runtime.id;
+  const searchUrl = `${COMPARISON_PAGE_URL}?query={searchTerms}`;
   console.log('='.repeat(60));
   console.log('🔧 开发调试信息');
   console.log('当前扩展ID:', extensionId);
   console.log('search_url应该设置为:');
-  console.log(`chrome-extension://${extensionId}/iframe/iframe.html?query={searchTerms}`);
+  console.log(searchUrl);
   console.log('='.repeat(60));
   
   // 可选：将正确的URL复制到剪贴板（需要clipboardWrite权限）
   try {
-    const searchUrl = `chrome-extension://${extensionId}/iframe/iframe.html?query={searchTerms}`;
     // 存储到local storage供手动获取
     chrome.storage.local.set({ 
       developmentSearchUrl: searchUrl,
@@ -363,37 +374,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true; // 保持消息通道开放
   }
-  else if (message.type === 'TOGGLE_SIDE_PANEL') {
-    // 处理侧边栏切换消息
-    const windowId = sender.tab.windowId;
-    console.log('🔍 收到TOGGLE_SIDE_PANEL消息，windowId:', windowId);
-    
-    // 先检查实际的侧边栏标签页是否存在
-    chrome.tabs.query({ windowId: windowId }, (tabs) => {
-      console.log('🔍 查询到的标签页数量:', tabs.length);
-      const sidePanelTab = tabs.find(tab => tab.url && tab.url.includes('iframe/iframe.html'));
-      const actualIsOpen = !!sidePanelTab;
-      const recordedIsOpen = sidePanelOpenState.get(windowId) || false;
-      
-      console.log('🔍 侧边栏状态检查:');
-      console.log('  - 实际状态:', actualIsOpen);
-      console.log('  - 记录状态:', recordedIsOpen);
-      console.log('  - windowId:', windowId);
-      console.log('  - 找到的侧边栏标签页:', sidePanelTab);
-      
-      // 如果状态不同步，以实际状态为准
-      if (actualIsOpen !== recordedIsOpen) {
-        console.log('🔍 侧边栏状态不同步，修正为实际状态:', actualIsOpen);
-        sidePanelOpenState.set(windowId, actualIsOpen);
-      }
-      
-      // 执行切换操作
-      console.log('🔍 开始执行侧边栏切换操作...');
-      handleSidePanelToggle(windowId, actualIsOpen);
+  else if (message.type === 'OPEN_COMPARISON_TAB' || message.type === 'TOGGLE_SIDE_PANEL') {
+    const windowId = sender.tab?.windowId;
+
+    if (typeof windowId !== 'number') {
+      sendResponse({ success: false, error: '无法确定当前窗口' });
+      return false;
+    }
+
+    console.log('收到打开对比标签页消息，windowId:', windowId);
+
+    openComparisonPageTab(windowId).then(() => {
+      sendResponse({ success: true, mode: 'tab' });
+    }).catch((error) => {
+      console.error('打开对比标签页失败:', error);
+      sendResponse({ success: false, error: error.message });
     });
-    
-    // 立即返回成功响应，不等待实际操作完成
-    sendResponse({ success: true });
+
     return true; // 保持消息通道开放
   }
 });
@@ -632,7 +629,7 @@ async function openSearchTabs(query, checkedSites = null) {
       console.log('找到支持 iframe 的启用站点:', iframeSites);
       
       const newTab = await chrome.tabs.create({
-          url: chrome.runtime.getURL(`iframe/iframe.html?query=${encodeURIComponent(query)}`),
+          url: getComparisonPageUrl(query),
           active: true
       });
 
@@ -755,12 +752,47 @@ function findExistingTab(tabs, targetDomain) {
   });
 } 
 
-// 处理扩展图标点击事件
-chrome.action.onClicked.addListener((tab) => {
-  // 打开新标签页显示 iframe.html
-  chrome.tabs.create({
-    url: chrome.runtime.getURL('iframe/iframe.html')
+function isComparisonPageUrl(url) {
+  return typeof url === 'string' && url.startsWith(COMPARISON_PAGE_URL);
+}
+
+async function findComparisonPageTab(windowId) {
+  const tabs = await chrome.tabs.query({ windowId });
+  return tabs.find((tab) => isComparisonPageUrl(tab.url)) || null;
+}
+
+async function openComparisonPageTab(windowId) {
+  const existingTab = await findComparisonPageTab(windowId);
+
+  if (existingTab) {
+    await chrome.tabs.update(existingTab.id, { active: true });
+    return existingTab;
+  }
+
+  return chrome.tabs.create({
+    windowId,
+    url: getComparisonPageUrl(),
+    active: true
   });
+}
+
+// 处理扩展图标点击事件
+chrome.action.onClicked.addListener(async (tab) => {
+  const windowId = tab?.windowId;
+
+  try {
+    if (typeof windowId === 'number') {
+      await openComparisonPageTab(windowId);
+      return;
+    }
+
+    await chrome.tabs.create({
+      url: getComparisonPageUrl(),
+      active: true
+    });
+  } catch (error) {
+    console.error('处理扩展图标点击失败:', error);
+  }
 });
 
 
@@ -837,127 +869,6 @@ chrome.runtime.setUninstallURL(self.externalLinks?.uninstallSurvey || '', () => 
   }
 });
 
-// 跟踪侧边栏状态
-let sidePanelOpenState = new Map();
-
-// 重置侧边栏状态的函数
-function resetSidePanelState(windowId) {
-  console.log('重置侧边栏状态，windowId:', windowId);
-  sidePanelOpenState.set(windowId, false);
-}
-
-// 处理侧边栏切换逻辑
-async function handleSidePanelToggle(windowId, isCurrentlyOpen) {
-  console.log('🔍 handleSidePanelToggle 被调用:');
-  console.log('  - windowId:', windowId);
-  console.log('  - isCurrentlyOpen:', isCurrentlyOpen);
-  
-  if (isCurrentlyOpen) {
-    // 如果侧边栏已经打开，则关闭它
-    console.log('🔍 侧边栏已打开，准备关闭...');
-    
-    // 直接关闭侧边栏标签页
-    chrome.tabs.query({ windowId: windowId }, (tabs) => {
-      const sidePanelTab = tabs.find(tab => tab.url && tab.url.includes('iframe/iframe.html'));
-      if (sidePanelTab) {
-        chrome.tabs.remove(sidePanelTab.id);
-        sidePanelOpenState.set(windowId, false);
-        console.log('✅ 已关闭侧边栏标签页');
-      } else {
-        sidePanelOpenState.set(windowId, false);
-        console.log('✅ 侧边栏已关闭');
-      }
-    });
-  } else {
-    // 如果侧边栏未打开，则打开它
-    console.log('🔍 侧边栏未打开，准备打开...');
-    
-    // 先检查是否支持 sidePanel API
-    console.log('🔍 检查 sidePanel API 支持:');
-    console.log('  - chrome.sidePanel 存在:', !!chrome.sidePanel);
-    console.log('  - chrome.sidePanel.open 存在:', !!(chrome.sidePanel && chrome.sidePanel.open));
-    
-    if (!chrome.sidePanel || !chrome.sidePanel.open) {
-      console.error('❌ 当前浏览器不支持 sidePanel API');
-      sidePanelOpenState.set(windowId, false);
-      return;
-    }
-    
-    // 调用 sidePanel.open() 并正确处理 Promise
-    console.log('🔍 调用 chrome.sidePanel.open({ windowId:', windowId, '})');
-    
-    // 使用正确的API调用方式
-    try {
-      await chrome.sidePanel.open({ windowId: windowId });
-      // 只有在成功打开后才设置状态为 true
-      sidePanelOpenState.set(windowId, true);
-      console.log('✅ 侧边栏已成功打开');
-    } catch (error) {
-      // 打开失败时确保状态为 false
-      sidePanelOpenState.set(windowId, false);
-      console.error('❌ 打开侧边栏失败:', error);
-      
-      // 提供更详细的错误信息
-      if (error.message) {
-        console.error('❌ 错误详情:', error.message);
-      }
-      if (error.name) {
-        console.error('❌ 错误名称:', error.name);
-      }
-      
-      // 尝试备用方案：直接打开新标签页
-      console.log('🔄 尝试备用方案：打开新标签页');
-      try {
-        await chrome.tabs.create({
-          url: chrome.runtime.getURL('iframe/iframe.html'),
-          active: true
-        });
-        console.log('✅ 已通过新标签页打开侧边栏内容');
-      } catch (tabError) {
-        console.error('❌ 备用方案也失败:', tabError);
-      }
-    }
-  }
-}
-
-// 监听标签页创建事件，同步侧边栏状态
-chrome.tabs.onCreated.addListener((tab) => {
-  // 检查是否是侧边栏标签页
-  if (tab.url && tab.url.includes('iframe/iframe.html')) {
-    console.log('检测到侧边栏标签页创建:', tab.id, 'windowId:', tab.windowId);
-    sidePanelOpenState.set(tab.windowId, true);
-  }
-});
-
-// 监听标签页更新事件，同步侧边栏状态
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  // 检查是否是侧边栏标签页且状态变为完成
-  if (changeInfo.status === 'complete' && tab.url && tab.url.includes('iframe/iframe.html')) {
-    console.log('侧边栏标签页加载完成:', tabId, 'windowId:', tab.windowId);
-    sidePanelOpenState.set(tab.windowId, true);
-  }
-});
-
-// 监听标签页移除事件，同步侧边栏状态
-chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
-  // 如果是窗口关闭，清理整个窗口的状态
-  if (removeInfo.isWindowClosing) {
-    console.log('窗口关闭，清理侧边栏状态:', removeInfo.windowId);
-    sidePanelOpenState.delete(removeInfo.windowId);
-  } else {
-    // 检查是否是侧边栏标签页被关闭
-    chrome.tabs.get(tabId).then(tab => {
-      if (tab.url && tab.url.includes('iframe/iframe.html')) {
-        console.log('侧边栏标签页被关闭:', tabId, 'windowId:', tab.windowId);
-        sidePanelOpenState.set(tab.windowId, false);
-      }
-    }).catch(error => {
-      // 标签页可能已经被移除，忽略错误
-      console.log('无法获取已移除标签页信息，忽略错误');
-    });
-  }
-});
-
 // Omnibox 事件处理
 chrome.omnibox.onInputChanged.addListener((text, suggest) => {
   console.log('Omnibox 输入变化:', text);
@@ -981,7 +892,7 @@ chrome.omnibox.onInputEntered.addListener((text, disposition) => {
   
   if (query) {
     // 打开AI快捷键搜索页面
-    const searchUrl = chrome.runtime.getURL(`iframe/iframe.html?query=${encodeURIComponent(query)}`);
+    const searchUrl = getComparisonPageUrl(query);
     
     if (disposition === 'currentTab') {
       // 在当前标签页打开
@@ -992,7 +903,7 @@ chrome.omnibox.onInputEntered.addListener((text, disposition) => {
     }
   } else {
     // 如果没有查询内容，直接打开AI快捷键页面
-    const defaultUrl = chrome.runtime.getURL('iframe/iframe.html');
+    const defaultUrl = getComparisonPageUrl();
     
     if (disposition === 'currentTab') {
       chrome.tabs.update({ url: defaultUrl });
