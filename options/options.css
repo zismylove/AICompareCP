@@ -243,6 +243,74 @@ input:checked + .slider:before {
     gap: 5px;
 }
 
+.prompt-prefix-section {
+  border-top: 1px solid #eee;
+  padding-top: 20px;
+}
+
+.prompt-prefix-description {
+  color: #666;
+  margin-bottom: 10px;
+}
+
+.prompt-prefix-input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 110px;
+  padding: 10px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  resize: vertical;
+  font-size: 14px;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.prompt-prefix-input:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.15);
+}
+
+.prompt-prefix-help {
+  margin-top: 8px;
+  color: #888;
+  font-size: 12px;
+}
+
+.prompt-prefix-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+}
+
+.prompt-prefix-save-btn,
+.prompt-prefix-clear-btn {
+  border: none;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.prompt-prefix-save-btn {
+  background: #4caf50;
+  color: #fff;
+}
+
+.prompt-prefix-save-btn:hover {
+  background: #43a047;
+}
+
+.prompt-prefix-clear-btn {
+  background: #f0f0f0;
+  color: #555;
+}
+
+.prompt-prefix-clear-btn:hover {
+  background: #e2e2e2;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .sidebar {

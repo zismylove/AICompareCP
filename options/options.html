@@ -45,6 +45,22 @@
           <div class="site-section">
             <div id="buttonSiteConfigs" class="site-configs"></div>
           </div>
+          <div class="site-section prompt-prefix-section">
+            <h2 data-i18n="promptPrefixTitle">前置提示词预设</h2>
+            <p class="prompt-prefix-description" data-i18n="promptPrefixDescription">你输入的问题会自动拼接在该内容后发送给 AI。</p>
+            <textarea
+              id="promptPrefixInput"
+              class="prompt-prefix-input"
+              rows="4"
+              data-i18n-placeholder="promptPrefixPlaceholder"
+              placeholder="例如：你是一名资深游戏开发顾问，请优先从系统设计、性能和可维护性角度回答。"
+            ></textarea>
+            <div class="prompt-prefix-help" data-i18n="promptPrefixHelp">留空即关闭前置提示词功能。</div>
+            <div class="prompt-prefix-actions">
+              <button id="savePromptPrefixBtn" class="prompt-prefix-save-btn" data-i18n="savePromptPrefix">保存前置提示词</button>
+              <button id="clearPromptPrefixBtn" class="prompt-prefix-clear-btn" data-i18n="clearPromptPrefix">清空</button>
+            </div>
+          </div>
         </section>
 
         <!-- AI站点设置 -->

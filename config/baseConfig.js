@@ -12,6 +12,11 @@ const DEV_CONFIG = {
   FORCE_LOCAL_CONFIG: true   // 开发时强制使用本地配置文件
 };
 
+// 功能开关
+const FEATURE_FLAGS = {
+  ENABLE_REMOTE_SITE_CONFIG_AUTO_UPDATE: false // 关闭站点配置自动更新
+};
+
 // 生产环境 console 重写（仅在 production 模式下）
 if (DEV_CONFIG.IS_PRODUCTION) {
   console.log = function() { return undefined; };
@@ -247,6 +252,53 @@ const AppConfigManager = {
   }
 };
 
+// 提示词前置管理器
+const PromptPrefixManager = {
+  storageKey: 'promptPrefix',
+
+  normalizePrefix(prefix) {
+    return typeof prefix === 'string' ? prefix.trim() : '';
+  },
+
+  normalizeQuery(query) {
+    return typeof query === 'string' ? query.trim() : '';
+  },
+
+  async getPrefix() {
+    try {
+      const { [this.storageKey]: promptPrefix = '' } = await chrome.storage.sync.get(this.storageKey);
+      return this.normalizePrefix(promptPrefix);
+    } catch (error) {
+      console.error('读取提示词前置失败:', error);
+      return '';
+    }
+  },
+
+  applyPrefix(query, prefix = '') {
+    const normalizedQuery = this.normalizeQuery(query);
+    if (!normalizedQuery) {
+      return '';
+    }
+
+    const normalizedPrefix = this.normalizePrefix(prefix);
+    if (!normalizedPrefix) {
+      return normalizedQuery;
+    }
+
+    // 避免重复拼接
+    if (normalizedQuery.startsWith(normalizedPrefix)) {
+      return normalizedQuery;
+    }
+
+    return `${normalizedPrefix}\n\n${normalizedQuery}`;
+  },
+
+  async apply(query) {
+    const prefix = await this.getPrefix();
+    return this.applyPrefix(query, prefix);
+  }
+};
+
 // 版本号比较函数
 function compareVersions(version1, version2) {
   // 如果版本号相同，返回 0
@@ -327,6 +379,11 @@ const RemoteConfigManager = {
   
   // 检查并更新配置
   async checkAndUpdateConfig() {
+    if (!FEATURE_FLAGS.ENABLE_REMOTE_SITE_CONFIG_AUTO_UPDATE) {
+      console.log('站点配置自动更新已关闭，跳过远程检查');
+      return { hasUpdate: false, reason: 'auto_update_disabled' };
+    }
+
     try {
       const response = await fetch(this.configUrl);
       if (!response.ok) {
@@ -612,6 +669,8 @@ if (typeof window === 'undefined') {
 
   self.AppConfigManager = AppConfigManager;
   self.RemoteConfigManager = RemoteConfigManager;
+  self.PromptPrefixManager = PromptPrefixManager;
+  self.FeatureFlags = FEATURE_FLAGS;
   
   // 开发环境配置切换函数
   self.toggleDevMode = function() {
@@ -723,6 +782,8 @@ else {
   
   window.AppConfigManager = AppConfigManager;
   window.RemoteConfigManager = RemoteConfigManager;
+  window.PromptPrefixManager = PromptPrefixManager;
+  window.FeatureFlags = FEATURE_FLAGS;
   
   // 开发环境配置切换函数
   window.toggleDevMode = function() {

@@ -108,6 +108,24 @@ async function initializeDefaultPromptTemplates() {
   }
 }
 
+// 将用户设置的前置提示词拼接到查询内容前
+async function applyPromptPrefixToQuery(query) {
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+  if (!normalizedQuery) {
+    return '';
+  }
+
+  try {
+    if (self.PromptPrefixManager && typeof self.PromptPrefixManager.apply === 'function') {
+      return await self.PromptPrefixManager.apply(normalizedQuery);
+    }
+  } catch (error) {
+    console.error('应用前置提示词失败，使用原始查询:', error);
+  }
+
+  return normalizedQuery;
+}
+
 // 扩展启动时检查配置更新
 chrome.runtime.onStartup.addListener(async () => {
   try {
@@ -403,7 +421,8 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   if (message.action === 'executeHandler') {
     const siteHandler = await getHandlerForUrl(message.url);
     if (siteHandler && siteHandler.searchHandler) {
-      executeSiteHandler(sender.tab.id, message.query, siteHandler).catch(error => {
+      const finalQuery = await applyPromptPrefixToQuery(message.query);
+      executeSiteHandler(sender.tab.id, finalQuery, siteHandler).catch(error => {
         console.error('站点处理失败:', error);
       });
     }
@@ -553,6 +572,12 @@ async function getHandlerForUrl(url) {
     console.log('开始处理单站点搜索:', query, siteName);
 
   try {
+    const finalQuery = await applyPromptPrefixToQuery(query);
+    if (!finalQuery) {
+      console.warn('单站点搜索查询为空，跳过执行');
+      return;
+    }
+
     console.log('handleSingleSiteSearch处理单站点搜索:', query, siteName);
     const sites = await self.getDefaultSites();
     if (!sites || !sites.length) {
@@ -574,7 +599,7 @@ async function getHandlerForUrl(url) {
       // 判断是否支持URL拼接查询
       if (siteConfig.supportUrlQuery) {
         // URL 拼接方式的站点,直接打开新标签页
-      const url = siteConfig.url.replace('{query}', encodeURIComponent(query));
+      const url = siteConfig.url.replace('{query}', encodeURIComponent(finalQuery));
         console.log('使用URL拼接方式打开:', url);
       await chrome.tabs.create({ url, active: true });
       } else {
@@ -594,7 +619,7 @@ async function getHandlerForUrl(url) {
         });
         
         // 执行对应站点的处理函数
-        await executeSiteHandler(tab.id, query, {
+        await executeSiteHandler(tab.id, finalQuery, {
           name: siteConfig.name,
           searchHandler: siteConfig.searchHandler,
           supportUrlQuery: siteConfig.supportUrlQuery
@@ -607,7 +632,13 @@ async function getHandlerForUrl(url) {
 
 // 修改后的 openSearchTabs 函数
 async function openSearchTabs(query, checkedSites = null) {
-  console.log('开始执行多AI查询 查询词:', query);
+  const finalQuery = await applyPromptPrefixToQuery(query);
+  if (!finalQuery) {
+    console.warn('多AI查询内容为空，跳过执行');
+    return;
+  }
+
+  console.log('开始执行多AI查询 查询词:', finalQuery);
   const sites = await self.getDefaultSites();
   
   if (!sites || !sites.length) {
@@ -632,7 +663,7 @@ async function openSearchTabs(query, checkedSites = null) {
       console.log('找到支持 iframe 的启用站点:', iframeSites);
       
       const newTab = await chrome.tabs.create({
-          url: chrome.runtime.getURL(`iframe/iframe.html?query=${encodeURIComponent(query)}`),
+          url: chrome.runtime.getURL(`iframe/iframe.html?query=${encodeURIComponent(finalQuery)}`),
           active: true
       });
 
@@ -644,7 +675,7 @@ async function openSearchTabs(query, checkedSites = null) {
               // 向新标签页发送消息,传递查询词和需要加载的站点信息
               chrome.tabs.sendMessage(newTab.id, {
                   type: 'loadIframes',
-                  query: query,
+                  query: finalQuery,
                   sites: iframeSites
               });
           }
@@ -670,7 +701,7 @@ async function openSearchTabs(query, checkedSites = null) {
     }
 
     const url = site.supportUrlQuery 
-      ? site.url.replace('{query}', encodeURIComponent(query))
+      ? site.url.replace('{query}', encodeURIComponent(finalQuery))
       : site.url;
       
     console.log('处理站点:', {
@@ -703,7 +734,7 @@ async function openSearchTabs(query, checkedSites = null) {
         if (siteHandler && siteHandler.searchHandler) {
           console.log('执行站点处理函数', siteHandler.name);
           console.log('标签页ID:', existingTab.id);
-          await executeSiteHandler(existingTab.id, query, siteHandler);
+          await executeSiteHandler(existingTab.id, finalQuery, siteHandler);
           console.log('执行站点处理函数完成');
         } else {
           console.warn('未找到对应的处理函数');
@@ -721,7 +752,7 @@ async function openSearchTabs(query, checkedSites = null) {
             console.log('站点URL:', url);
             const siteHandler = await getHandlerForUrl(url);
             if (siteHandler && siteHandler.searchHandler) {
-              executeSiteHandler(tab.id, query, siteHandler);
+              executeSiteHandler(tab.id, finalQuery, siteHandler);
             }
             chrome.tabs.onUpdated.removeListener(listener);
           }
@@ -973,13 +1004,15 @@ chrome.omnibox.onInputChanged.addListener((text, suggest) => {
   suggest(suggestions);
 });
 
-chrome.omnibox.onInputEntered.addListener((text, disposition) => {
+chrome.omnibox.onInputEntered.addListener(async (text, disposition) => {
   console.log('Omnibox 输入确认:', text, disposition);
   
   // 解析输入文本
-  const query = text.replace(/^ai\s+/, '').trim();
+  const rawQuery = text.replace(/^ai\s+/, '').trim();
   
-  if (query) {
+  if (rawQuery) {
+    const query = await applyPromptPrefixToQuery(rawQuery);
+
     // 打开AI快捷键搜索页面
     const searchUrl = chrome.runtime.getURL(`iframe/iframe.html?query=${encodeURIComponent(query)}`);
     

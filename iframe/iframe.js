@@ -19,6 +19,204 @@ const SUPPORTED_FILE_EXTENSIONS = [
   'zip', 'rar', '7z', 'gz', 'tar', 'bz2', 'xz'
 ];
 
+// 将用户设置的前置提示词拼接到查询内容前
+async function applyPromptPrefixToQuery(query) {
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+  if (!normalizedQuery) {
+    return '';
+  }
+
+  try {
+    if (window.PromptPrefixManager && typeof window.PromptPrefixManager.apply === 'function') {
+      return await window.PromptPrefixManager.apply(normalizedQuery);
+    }
+
+    const { promptPrefix = '' } = await chrome.storage.sync.get('promptPrefix');
+    const normalizedPrefix = typeof promptPrefix === 'string' ? promptPrefix.trim() : '';
+    if (!normalizedPrefix || normalizedQuery.startsWith(normalizedPrefix)) {
+      return normalizedQuery;
+    }
+
+    return `${normalizedPrefix}\n\n${normalizedQuery}`;
+  } catch (error) {
+    console.error('应用前置提示词失败，使用原始查询:', error);
+    return normalizedQuery;
+  }
+}
+
+const PROMPT_PRESET_NONE_ID = '__none__';
+const PROMPT_PRESET_CUSTOM_PREFIX_ID = '__custom_prefix__';
+let promptPresetTemplatesCache = [];
+let promptPresetSelectorInitialized = false;
+
+function sortPromptTemplates(templates) {
+  return [...templates]
+    .filter(template => template && template.id && template.name && template.query)
+    .sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+function applyTemplateToQuery(templateQuery, query) {
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+  const normalizedTemplate = typeof templateQuery === 'string' ? templateQuery.trim() : '';
+
+  if (!normalizedQuery) {
+    return '';
+  }
+
+  if (!normalizedTemplate) {
+    return normalizedQuery;
+  }
+
+  if (normalizedTemplate.includes('{query}')) {
+    return normalizedTemplate.replace(/\{query\}/g, normalizedQuery);
+  }
+
+  if (normalizedQuery.startsWith(normalizedTemplate)) {
+    return normalizedQuery;
+  }
+
+  return `${normalizedTemplate}\n\n${normalizedQuery}`;
+}
+
+async function renderPromptPresetSelector() {
+  const promptPresetSelect = document.getElementById('promptPresetSelect');
+  if (!promptPresetSelect) {
+    return;
+  }
+
+  try {
+    const storageData = await chrome.storage.sync.get(['promptTemplates', 'promptPrefix', 'activePromptPresetId']);
+    const promptTemplates = sortPromptTemplates(storageData.promptTemplates || []);
+    const promptPrefix = typeof storageData.promptPrefix === 'string' ? storageData.promptPrefix.trim() : '';
+    const hasCustomPrefix = !!promptPrefix;
+    const hasStoredActivePreset = typeof storageData.activePromptPresetId === 'string';
+
+    promptPresetTemplatesCache = promptTemplates;
+    promptPresetSelect.innerHTML = '';
+
+    const noneOption = document.createElement('option');
+    noneOption.value = PROMPT_PRESET_NONE_ID;
+    noneOption.textContent = chrome.i18n.getMessage('promptPresetNoneOption') || '不使用预设';
+    promptPresetSelect.appendChild(noneOption);
+
+    if (hasCustomPrefix) {
+      const customOption = document.createElement('option');
+      customOption.value = PROMPT_PRESET_CUSTOM_PREFIX_ID;
+      customOption.textContent = chrome.i18n.getMessage('promptPresetCustomPrefixOption') || '自定义前置提示词';
+      promptPresetSelect.appendChild(customOption);
+    }
+
+    promptTemplates.forEach(template => {
+      const option = document.createElement('option');
+      option.value = template.id;
+      option.textContent = template.name;
+      promptPresetSelect.appendChild(option);
+    });
+
+    const validPresetIds = new Set([
+      PROMPT_PRESET_NONE_ID,
+      ...(hasCustomPrefix ? [PROMPT_PRESET_CUSTOM_PREFIX_ID] : []),
+      ...promptTemplates.map(template => template.id)
+    ]);
+
+    let activePresetId = hasStoredActivePreset
+      ? storageData.activePromptPresetId
+      : (hasCustomPrefix ? PROMPT_PRESET_CUSTOM_PREFIX_ID : PROMPT_PRESET_NONE_ID);
+
+    if (!validPresetIds.has(activePresetId)) {
+      activePresetId = PROMPT_PRESET_NONE_ID;
+    }
+
+    promptPresetSelect.value = activePresetId;
+
+    const selectTitle = chrome.i18n.getMessage('promptPresetSelectTitle');
+    if (selectTitle) {
+      promptPresetSelect.title = selectTitle;
+    }
+
+    if (!hasStoredActivePreset || storageData.activePromptPresetId !== activePresetId) {
+      await chrome.storage.sync.set({ activePromptPresetId: activePresetId });
+    }
+  } catch (error) {
+    console.error('渲染预设提示词下拉框失败:', error);
+  }
+}
+
+async function initializePromptPresetSelector() {
+  if (promptPresetSelectorInitialized) {
+    return;
+  }
+
+  const promptPresetSelect = document.getElementById('promptPresetSelect');
+  if (!promptPresetSelect) {
+    return;
+  }
+
+  promptPresetSelectorInitialized = true;
+  await renderPromptPresetSelector();
+
+  promptPresetSelect.addEventListener('change', async () => {
+    try {
+      await chrome.storage.sync.set({ activePromptPresetId: promptPresetSelect.value || PROMPT_PRESET_NONE_ID });
+    } catch (error) {
+      console.error('保存当前预设提示词失败:', error);
+    }
+  });
+
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace !== 'sync') {
+      return;
+    }
+
+    if (changes.promptTemplates || changes.promptPrefix || changes.activePromptPresetId) {
+      renderPromptPresetSelector();
+    }
+  });
+}
+
+async function applySelectedPromptPresetToQuery(query) {
+  const normalizedQuery = typeof query === 'string' ? query.trim() : '';
+  if (!normalizedQuery) {
+    return '';
+  }
+
+  try {
+    const promptPresetSelect = document.getElementById('promptPresetSelect');
+    let activePresetId = promptPresetSelect ? promptPresetSelect.value : '';
+
+    if (!activePresetId) {
+      const { activePromptPresetId = PROMPT_PRESET_NONE_ID } = await chrome.storage.sync.get('activePromptPresetId');
+      activePresetId = activePromptPresetId;
+    }
+
+    if (activePresetId === PROMPT_PRESET_CUSTOM_PREFIX_ID) {
+      return await applyPromptPrefixToQuery(normalizedQuery);
+    }
+
+    if (!activePresetId || activePresetId === PROMPT_PRESET_NONE_ID) {
+      return normalizedQuery;
+    }
+
+    let selectedTemplate = promptPresetTemplatesCache.find(template => template.id === activePresetId);
+
+    if (!selectedTemplate) {
+      const { promptTemplates = [] } = await chrome.storage.sync.get('promptTemplates');
+      const sortedTemplates = sortPromptTemplates(promptTemplates);
+      promptPresetTemplatesCache = sortedTemplates;
+      selectedTemplate = sortedTemplates.find(template => template.id === activePresetId);
+    }
+
+    if (!selectedTemplate) {
+      return normalizedQuery;
+    }
+
+    return applyTemplateToQuery(selectedTemplate.query, normalizedQuery);
+  } catch (error) {
+    console.error('应用选中的预设提示词失败，使用原始查询:', error);
+    return normalizedQuery;
+  }
+}
+
 // 检测是否具有有效的文件扩展名
 function hasValidFileExtension(text) {
   if (!text || typeof text !== 'string') {
@@ -85,6 +283,8 @@ async function requestClipboardPermission() {
 
 // 页面加载完成后的初始化
 document.addEventListener('DOMContentLoaded', async function() {
+    await initializePromptPresetSelector();
+
     // 初始化自动调整高度的输入框
     const searchInput = document.getElementById('searchInput');
     if (searchInput) {
@@ -182,7 +382,9 @@ document.addEventListener('DOMContentLoaded', async function() {
 
                     if (availableSites.length > 0) {
                         console.log('使用查询内容创建 iframes:', query, availableSites);
-                        createIframes(query, availableSites);
+                        applyPromptPrefixToQuery(query).then(finalQuery => {
+                          createIframes(finalQuery, availableSites);
+                        });
                     } else {
                         console.log('没有可用的站点');
                     }
@@ -795,13 +997,15 @@ function updateColumns(columns) {
 }
 
 // 监听来自 background 的消息
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   console.log('iframe.js 收到消息:', message);
   if (message.type === 'loadIframes') {
     console.log('开始加载 iframes, 查询词:', message.query);
+    const rawQuery = typeof message.query === 'string' ? message.query : '';
+    const finalQuery = await applyPromptPrefixToQuery(rawQuery);
     const searchInput = document.getElementById('searchInput');
-    searchInput.value = message.query;
-    createIframes(message.query, message.sites);
+    searchInput.value = rawQuery;
+    createIframes(finalQuery, message.sites);
   }
 });
 
@@ -1224,39 +1428,32 @@ async function getIframeHandler(iframeUrl) {
     return null;
   }
 }
+// 统一处理 iframe 页面内的搜索提交
+async function submitSearchFromInput() {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) {
+    return;
+  }
+
+  shanshuo();
+  const finalQuery = await applySelectedPromptPresetToQuery(query);
+  if (finalQuery) {
+    iframeFresh(finalQuery);
+  }
+}
+
 // 添加搜索按钮
 document.getElementById('searchButton').addEventListener('click', () => {
-  const query = document.getElementById('searchInput').value.trim();
-  if (query) {
-    shanshuo();
-    iframeFresh(query);
-  }
-});
-
-// 删除重复的 createIframes 函数声明
-
-// 添加搜索按钮
-document.getElementById('searchButton').addEventListener('click', () => {
-  const query = document.getElementById('searchInput').value.trim();
-  if (query) {
-    shanshuo();
-    iframeFresh(query);
-  }
+  submitSearchFromInput();
 });
 
 // 处理回车键
 document.getElementById('searchInput').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        const query = document.getElementById('searchInput').value.trim();
-        if (query) {
-            shanshuo();
-            iframeFresh(query);
-
-        }
-        
-    }
-});   
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    submitSearchFromInput();
+  }
+});
 
 // 添加输入监听器，当searchInput有内容时显示建议
 document.getElementById('searchInput').addEventListener('input', (e) => {
@@ -1808,6 +2005,11 @@ function showClipboardDeniedMessage() {
 
 // 检查站点配置更新
 async function checkForSiteConfigUpdates() {
+  if (window.FeatureFlags && window.FeatureFlags.ENABLE_REMOTE_SITE_CONFIG_AUTO_UPDATE === false) {
+    console.log('站点配置自动更新已关闭，跳过检查');
+    return;
+  }
+
   try {
     if (window.RemoteConfigManager) {
       // 首先检查是否有未显示的更新
@@ -2141,7 +2343,9 @@ async function showDetailedUpdateInfo() {
       button.disabled = true;
       
       try {
-        if (window.RemoteConfigManager) {
+        if (window.FeatureFlags && window.FeatureFlags.ENABLE_REMOTE_SITE_CONFIG_AUTO_UPDATE === false) {
+          showToast('自动更新已关闭');
+        } else if (window.RemoteConfigManager) {
           const updateInfo = await window.RemoteConfigManager.autoCheckUpdate();
           if (updateInfo && updateInfo.hasUpdate) {
             await window.RemoteConfigManager.updateLocalConfig(updateInfo.config);
@@ -2149,6 +2353,8 @@ async function showDetailedUpdateInfo() {
             closeModal();
             // 显示新的更新通知
             setTimeout(() => showUpdateNotification(), 500);
+          } else if (updateInfo && updateInfo.reason === 'auto_update_disabled') {
+            showToast('自动更新已关闭');
           } else {
             showToast('已是最新版本');
           }

@@ -238,6 +238,39 @@
   "templateQueryRequired": {
     "message": "请输入查询模板"
   },
+  "promptPrefixTitle": {
+    "message": "前置提示词预设"
+  },
+  "promptPrefixDescription": {
+    "message": "你输入的问题会自动拼接在该内容后发送给 AI。"
+  },
+  "promptPrefixPlaceholder": {
+    "message": "例如：你是一名资深游戏开发顾问，请优先从系统设计、性能和可维护性角度回答。"
+  },
+  "promptPrefixHelp": {
+    "message": "留空即关闭前置提示词功能。"
+  },
+  "savePromptPrefix": {
+    "message": "保存前置提示词"
+  },
+  "clearPromptPrefix": {
+    "message": "清空"
+  },
+  "promptPrefixSaved": {
+    "message": "前置提示词已保存"
+  },
+  "promptPrefixCleared": {
+    "message": "前置提示词已清空"
+  },
+  "promptPresetSelectTitle": {
+    "message": "选择当前预设提示词"
+  },
+  "promptPresetNoneOption": {
+    "message": "不使用预设"
+  },
+  "promptPresetCustomPrefixOption": {
+    "message": "自定义前置提示词"
+  },
   "localFileDetected": {
     "message": "检测到本地文件"
   },

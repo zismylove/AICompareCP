@@ -1,4 +1,5 @@
 let currentButtonConfig = null;
+let promptPrefixSettingsInitialized = false;
 // 系统默认站点设置将通过 getDefaultSites() 动态获取
 
 
@@ -39,6 +40,52 @@ function showToast(message, duration = 2000) {
   }, duration);
 }
 
+// 初始化前置提示词设置
+async function initializePromptPrefixSettings() {
+  if (promptPrefixSettingsInitialized) {
+    return;
+  }
+
+  const promptPrefixInput = document.getElementById('promptPrefixInput');
+  const savePromptPrefixBtn = document.getElementById('savePromptPrefixBtn');
+  const clearPromptPrefixBtn = document.getElementById('clearPromptPrefixBtn');
+
+  if (!promptPrefixInput || !savePromptPrefixBtn || !clearPromptPrefixBtn) {
+    return;
+  }
+
+  promptPrefixSettingsInitialized = true;
+
+  try {
+    const { promptPrefix = '' } = await chrome.storage.sync.get('promptPrefix');
+    promptPrefixInput.value = typeof promptPrefix === 'string' ? promptPrefix : '';
+  } catch (error) {
+    console.error('读取前置提示词失败:', error);
+  }
+
+  savePromptPrefixBtn.addEventListener('click', async () => {
+    try {
+      const promptPrefix = promptPrefixInput.value.trim();
+      await chrome.storage.sync.set({ promptPrefix });
+      showToast(chrome.i18n.getMessage('promptPrefixSaved') || chrome.i18n.getMessage('saveSuccess'));
+    } catch (error) {
+      console.error('保存前置提示词失败:', error);
+      showToast(chrome.i18n.getMessage('saveFailed', [error.message || 'unknown']));
+    }
+  });
+
+  clearPromptPrefixBtn.addEventListener('click', async () => {
+    try {
+      promptPrefixInput.value = '';
+      await chrome.storage.sync.set({ promptPrefix: '' });
+      showToast(chrome.i18n.getMessage('promptPrefixCleared') || chrome.i18n.getMessage('saveSuccess'));
+    } catch (error) {
+      console.error('清空前置提示词失败:', error);
+      showToast(chrome.i18n.getMessage('saveFailed', [error.message || 'unknown']));
+    }
+  });
+}
+
 // 初始化页面文本
 function initializeI18n() {
   // 更新页面标题
@@ -53,6 +100,15 @@ function initializeI18n() {
       element.textContent = message;
     }
   });
+
+  // 更新带有 data-i18n-placeholder 的元素 placeholder
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+    const key = element.getAttribute('data-i18n-placeholder');
+    const message = chrome.i18n.getMessage(key);
+    if (message) {
+      element.setAttribute('placeholder', message);
+    }
+  });
 }
 
 // 等待 DOM 加载完成后初始化
@@ -62,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeI18n();
   initializeRuleInfo();
   initializePromptTemplates();
+  initializePromptPrefixSettings();
 });
 
 // 显示消息
@@ -266,6 +323,7 @@ document.addEventListener('DOMContentLoaded', function() {
   loadConfig();
   initializeNavigation();
   initializeDisabledSites();
+  initializePromptPrefixSettings();
 });
 
 // 拖拽功能实现
@@ -1064,6 +1122,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // 初始化导航
   initializeNavigation();
+  initializePromptPrefixSettings();
   
   // 处理锚点跳转
   handleHashNavigation();

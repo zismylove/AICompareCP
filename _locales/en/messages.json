@@ -243,6 +243,39 @@
   "templateQueryRequired": {
     "message": "Please enter query template"
   },
+  "promptPrefixTitle": {
+    "message": "Prompt Prefix Preset"
+  },
+  "promptPrefixDescription": {
+    "message": "Your question will be appended after this preset text before sending to AI."
+  },
+  "promptPrefixPlaceholder": {
+    "message": "Example: You are a senior game development consultant. Please prioritize system design, performance, and maintainability."
+  },
+  "promptPrefixHelp": {
+    "message": "Leave empty to disable prompt prefix."
+  },
+  "savePromptPrefix": {
+    "message": "Save Prefix"
+  },
+  "clearPromptPrefix": {
+    "message": "Clear"
+  },
+  "promptPrefixSaved": {
+    "message": "Prompt prefix saved"
+  },
+  "promptPrefixCleared": {
+    "message": "Prompt prefix cleared"
+  },
+  "promptPresetSelectTitle": {
+    "message": "Select current prompt preset"
+  },
+  "promptPresetNoneOption": {
+    "message": "No preset"
+  },
+  "promptPresetCustomPrefixOption": {
+    "message": "Custom prefix preset"
+  },
   "localFileDetected": {
     "message": "Local File Detected"
   },

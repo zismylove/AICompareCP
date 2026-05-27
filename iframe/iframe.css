@@ -81,6 +81,28 @@ html {
     min-height: 36px; /* 最小高度与输入框一致 */
 }
 
+.prompt-preset-row {
+    margin-bottom: 6px;
+}
+
+.prompt-preset-select {
+    max-width: 320px;
+    min-width: 180px;
+    height: 30px;
+    padding: 0 10px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    background: #fff;
+    color: #333;
+    font-size: 13px;
+    outline: none;
+}
+
+.prompt-preset-select:focus {
+    border-color: #4096ff;
+    box-shadow: 0 0 0 2px rgba(64, 150, 255, 0.18);
+}
+
 .input-wrapper {
     position: relative;
     display: flex;
@@ -230,7 +252,7 @@ html {
 
 
 #iframes-container {
-    margin-top: 60px;
+    margin-top: 92px;
     display: grid;
     grid-template-columns: repeat(var(--columns, 2), 1fr);
     gap: 16px;
@@ -245,7 +267,7 @@ html {
 }
 
 .ai-iframe {
-    height: calc(100vh - 60px);
+    height: calc(100vh - 92px);
 }
 
 /* 列数选择器样式 */
@@ -540,7 +562,7 @@ html {
 .nav {
     position: fixed;
     left: 0;
-    top: 60px;
+    top: 92px;
     bottom: 0;
     width: 70px;
     padding: 20px 0;
@@ -623,7 +645,7 @@ html {
 
 #queryList {
     position: fixed;
-    top: 55px;
+    top: 88px;
     left: 50%;
     transform: translateX(-50%);
     width: 820px;
