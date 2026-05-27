@@ -217,6 +217,25 @@ async function applySelectedPromptPresetToQuery(query) {
   }
 }
 
+async function resetPromptPresetSelectorToNone() {
+  const promptPresetSelect = document.getElementById('promptPresetSelect');
+  const currentPresetId = promptPresetSelect ? promptPresetSelect.value : '';
+
+  if (promptPresetSelect && currentPresetId !== PROMPT_PRESET_NONE_ID) {
+    promptPresetSelect.value = PROMPT_PRESET_NONE_ID;
+  }
+
+  if (currentPresetId === PROMPT_PRESET_NONE_ID) {
+    return;
+  }
+
+  try {
+    await chrome.storage.sync.set({ activePromptPresetId: PROMPT_PRESET_NONE_ID });
+  } catch (error) {
+    console.error('重置预设提示词为默认失败:', error);
+  }
+}
+
 // 检测是否具有有效的文件扩展名
 function hasValidFileExtension(text) {
   if (!text || typeof text !== 'string') {
@@ -1439,6 +1458,7 @@ async function submitSearchFromInput() {
   const finalQuery = await applySelectedPromptPresetToQuery(query);
   if (finalQuery) {
     iframeFresh(finalQuery);
+    await resetPromptPresetSelectorToNone();
   }
 }
 
