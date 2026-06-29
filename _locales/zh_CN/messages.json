@@ -257,10 +257,10 @@
     "message": "我知道了"
   },
   "exportResponses": {
-    "message": "导出AI比一比结果"
+    "message": "导出完整对话"
   },
   "exportModalTitle": {
-    "message": "导出AI比一比结果"
+    "message": "导出完整对话"
   },
   "exportFormat": {
     "message": "导出格式"
@@ -293,6 +293,6 @@
     "message": "内容提取失败"
   },
   "devNotice": {
-    "message": "功能在开发中，可能会有错误或不足"
+    "message": "将导出所选页面中的全部问题和回答"
   }
-} 
+}

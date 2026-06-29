@@ -262,10 +262,10 @@
     "message": "Got it"
   },
   "exportResponses": {
-    "message": "Export AI Compare Results"
+    "message": "Export Full Conversations"
   },
   "exportModalTitle": {
-    "message": "Export AI Compare Results"
+    "message": "Export Full Conversations"
   },
   "exportFormat": {
     "message": "Export Format"
@@ -298,6 +298,6 @@
     "message": "Content extraction failed"
   },
   "devNotice": {
-    "message": "Feature in development, may have errors or limitations"
+    "message": "Exports every question and answer from the selected pages"
   }
-} 
+}

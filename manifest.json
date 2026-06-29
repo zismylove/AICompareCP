@@ -40,6 +40,15 @@
 
   "content_scripts": [
     {
+      "matches": ["https://claude.ai/*"],
+      "js": [
+        "iframe/claude-model-fix.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
+    {
       "matches": ["<all_urls>"],
       "js": [
         "config/baseConfig.js",
