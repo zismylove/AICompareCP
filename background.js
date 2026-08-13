@@ -269,7 +269,7 @@ chrome.declarativeNetRequest.getSessionRules().then(rules => {
 
 // 如果规则为空，尝试动态添加规则
 chrome.declarativeNetRequest.updateSessionRules({
-  removeRuleIds: [999], // 先清除可能存在的规则 999
+  removeRuleIds: [999, 998],
   addRules: [{
     "id": 999,
     "priority": 1,
@@ -310,9 +310,26 @@ chrome.declarativeNetRequest.updateSessionRules({
       "urlFilter": "*://*/*",
       "resourceTypes": ["main_frame", "sub_frame"]
     }
+  },
+  {
+    "id": 998,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "Sec-Fetch-Site",
+          "operation": "set",
+          "value": "same-origin"
+        }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://*/*",
+      "resourceTypes": ["websocket", "xmlhttprequest"]
+    }
   }]
 }).then(() => {
-  // 再次检查规则
   return chrome.declarativeNetRequest.getSessionRules();
 }).then(rules => {
   console.log('更新后的规则:', rules);

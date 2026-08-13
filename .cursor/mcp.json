@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "C:\\Users\\HDDN\\AppData\\Roaming\\npm\\chrome-devtools-mcp.cmd",
+      "args": [
+        "--category-extensions=true",
+        "--no-usage-statistics",
+        "--no-performance-crux"
+      ]
+    },
+    "playwright": {
+      "command": "C:\\Users\\HDDN\\AppData\\Roaming\\npm\\playwright-mcp.cmd",
+      "args": []
+    }
+  }
+}

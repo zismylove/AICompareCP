@@ -49,5 +49,26 @@
           "sub_frame"
         ]
       }
+    },
+    {
+      "id": 2,
+      "priority": 1,
+      "action": {
+        "type": "modifyHeaders",
+        "requestHeaders": [
+          {
+            "header": "Sec-Fetch-Site",
+            "operation": "set",
+            "value": "same-origin"
+          }
+        ]
+      },
+      "condition": {
+        "urlFilter": "*://*/*",
+        "resourceTypes": [
+          "websocket",
+          "xmlhttprequest"
+        ]
+      }
     }
 ]
