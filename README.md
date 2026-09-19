@@ -63,6 +63,7 @@ This project now uses a tab-first Chrome Extension Manifest V3 architecture.
 4. `iframe/inject.js` + `config/siteHandlers.json`: Execute site-specific automation steps so each AI page receives and submits the query correctly.
 5. `content-scripts/`: Inject entry points into normal web pages, selected text flows, and search engine result pages.
 6. `options/` + `chrome.storage.sync/local`: Store user preferences, site settings, prompt templates, and cached site configurations.
+7. `background/grok-websocket-auth.js`: Keeps Grok's authenticated WebSocket handshake working when Grok is embedded in the comparison tab. The rule is limited to comparison tabs and the Grok chat endpoint.
 
 Chrome runtime flow:
 
@@ -71,6 +72,8 @@ Chrome runtime flow:
 3. Iframe-supported AI sites are loaded together in the comparison tab.
 4. Sites that do not support iframes are opened or reused as normal Chrome tabs.
 5. `inject.js` applies the configured handler steps to input the query and trigger submission.
+
+Grok iframe note: Chrome may omit Grok's `SameSite=Lax`/`Strict` session cookies from the embedded WebSocket handshake even though normal HTTPS requests work. The service worker uses the `cookies` permission and a tab-scoped declarative request rule to append the current `sso`, `sso-rw`, and `grok_device_id` cookies only to `wss://grok.com/ws/mgw/`. Closing the comparison tab or logging out clears the temporary rule.
 
 For a more detailed breakdown, see `DEVELOPER_GUIDE.md`.
 
@@ -148,6 +151,7 @@ Edge 旧版地址（仅历史保留，当前以 Chrome 版为主）：https://mi
 4. `iframe/inject.js` + `config/siteHandlers.json`：执行各个 AI 网站的自动化输入、点击、粘贴和提交逻辑。
 5. `content-scripts/`：把快捷入口注入普通网页、划词流程和搜索引擎结果页。
 6. `options/` + `chrome.storage.sync/local`：保存用户偏好、站点设置、提示词模板和缓存的站点配置。
+7. `background/grok-websocket-auth.js`：处理 Grok 嵌入对比页时的登录 WebSocket 握手，规则只作用于对比标签页和 Grok 聊天接口。
 
 Chrome 运行流程：
 
@@ -156,6 +160,8 @@ Chrome 运行流程：
 3. 支持 iframe 的 AI 站点会一起加载到对比标签页中。
 4. 不支持 iframe 的站点会以普通 Chrome 标签页方式打开或复用。
 5. `inject.js` 根据站点配置执行自动化步骤，把查询写入页面并触发提交。
+
+Grok iframe 说明：Chrome 可能在 Grok 被嵌入对比页时，省略 WebSocket 握手中的 `SameSite=Lax`/`Strict` 登录 Cookie，而普通 HTTPS 请求仍然正常。Service Worker 使用 `cookies` 权限读取当前登录态，并通过按标签页限定的声明式请求规则，仅向 `wss://grok.com/ws/mgw/` 补充 `sso`、`sso-rw` 和 `grok_device_id`。关闭对比页或退出登录后，临时规则会被清理。
 
 更详细的架构拆解请查看 `DEVELOPER_GUIDE.md`。
 

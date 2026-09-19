@@ -1068,7 +1068,17 @@ function createSingleIframe(siteName, url, container, query) {
       console.error('URL解析失败:', url);
     }
   }
-  iframe.src = url;
+  // Install the tab-scoped WebSocket auth rule before Grok starts connecting.
+  if (new URL(url).hostname === 'grok.com') {
+    chrome.runtime.sendMessage({ type: 'PREPARE_GROK_CONNECTION' })
+      .then(result => {
+        if (!result?.success) console.warn('Grok chat authentication preparation failed.');
+      })
+      .catch(() => console.warn('Grok chat authentication preparation failed.'))
+      .finally(() => { iframe.src = url; });
+  } else {
+    iframe.src = url;
+  }
 
   // 在 iframe 加载完成后，将页面滚动回顶部
   /*

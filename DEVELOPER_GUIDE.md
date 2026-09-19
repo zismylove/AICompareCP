@@ -19,6 +19,7 @@ For local development, load the unpacked extension from `chrome://extensions/` a
 - [Chrome Architecture / Chrome 架构](#chrome-architecture--chrome-架构)
 - [Key Chrome APIs / 关键 Chrome API](#key-chrome-apis--关键-chrome-api)
 - [Chrome Runtime Flow / Chrome 运行流程](#chrome-runtime-flow--chrome-运行流程)
+- [Grok Iframe WebSocket Authentication / Grok iframe WebSocket 认证](#grok-iframe-websocket-authentication--grok-iframe-websocket-认证)
 - [Adding New AI Sites / 添加新的 AI 站点](#adding-new-ai-sites--添加新的-ai-站点)
 - [Action Types Reference / 动作类型参考](#action-types-reference--动作类型参考)
 - [Debugging Guide / 调试指南](#debugging-guide--调试指南)
@@ -47,6 +48,8 @@ AICompareChrome/
 │   ├── iframe.js               # Multi-AI tab orchestration / 多 AI 标签页调度
 │   ├── inject.js               # Site automation runtime / 站点自动化运行时
 │   └── export-responses.js     # Export helpers / 导出辅助
+├── background/
+│   └── grok-websocket-auth.js  # Tab-scoped Grok WebSocket auth / Grok 标签页级 WebSocket 认证
 ├── options/
 │   ├── options.html            # Options UI / 设置页面
 │   └── options.js              # Settings persistence / 设置持久化
@@ -95,6 +98,36 @@ The current Chrome version uses a standard tab as the primary comparison surface
 5. **Normal Tab Fallback / 普通标签页回退**: Sites without iframe support are opened or reused as normal Chrome tabs / 不支持 iframe 的站点会以普通 Chrome 标签页方式打开或复用
 6. **Site Handler Execution / 站点处理执行**: After each target page loads, `inject.js` receives the query and executes the handler steps defined in `siteHandlers.json` / 目标页面加载后，`inject.js` 接收查询并执行 `siteHandlers.json` 中定义的处理步骤
 7. **Settings and State / 设置与状态**: Changes from the options page and runtime updates are persisted through Chrome storage / 设置页修改和运行时更新会通过 Chrome storage 持久化
+
+## Grok Iframe WebSocket Authentication / Grok iframe WebSocket 认证
+
+Grok's current chat client opens `wss://grok.com/ws/mgw/`. When the site is embedded in the extension comparison tab, Chrome can send the normal HTTPS requests with the logged-in session while omitting the `SameSite=Lax` and `SameSite=Strict` session cookies from the WebSocket handshake. Grok reports that handshake failure as a generic network or security error.
+
+当前 Grok 聊天客户端使用 `wss://grok.com/ws/mgw/`。当 Grok 被嵌入扩展对比标签页时，Chrome 可能让普通 HTTPS 请求继续使用登录态，却在 WebSocket 握手中省略 `SameSite=Lax` 和 `SameSite=Strict` 的会话 Cookie，Grok 随后会把握手失败显示成网络或安全软件错误。
+
+The workaround is implemented in `background/grok-websocket-auth.js`:
+
+该兼容逻辑位于 `background/grok-websocket-auth.js`：
+
+1. `manifest.json` declares the `cookies` permission alongside the existing `<all_urls>` host permission. / `manifest.json` 在已有 `<all_urls>` 主机权限之外声明 `cookies` 权限。
+2. The service worker reads only the unpartitioned `sso`, `sso-rw`, and `grok_device_id` cookies for `grok.com`. It never sends their values to page scripts. / Service Worker 只读取 `grok.com` 的未分区 `sso`、`sso-rw` 和 `grok_device_id`，不会把 Cookie 值发送给页面脚本。
+3. It creates a temporary declarative request rule only when a comparison tab exists. The rule matches `wss://grok.com/ws/mgw/`, has `initiatorDomains: ['grok.com']`, and is restricted to the comparison tab IDs. / 只有存在对比标签页时才创建临时声明式请求规则；规则匹配 `wss://grok.com/ws/mgw/`，限定 `initiatorDomains: ['grok.com']` 和对比标签页 ID。
+4. Cookie changes, tab navigation, tab closing, worker restart, login, and logout all trigger a refresh. A missing `sso` cookie removes the rule. / Cookie 变化、标签页导航或关闭、Service Worker 重启、登录和退出登录都会刷新规则；缺少 `sso` 时会移除规则。
+
+The old global rule that changed `Sec-Fetch-Site` for every WebSocket and XHR request must remain disabled. It changed unrelated sites and did not solve Grok authentication. / 旧的全局 `Sec-Fetch-Site` WebSocket/XHR 规则必须保持关闭；它会影响无关站点，也不能解决 Grok 登录认证。
+
+### Grok Debugging / Grok 调试
+
+Use a Chrome instance started with remote debugging, then inspect the comparison tab and the Grok iframe through CDP. A successful handshake appears as `Network.webSocketHandshakeResponseReceived` with status `101`. The expected post-fix flow is:
+
+使用带远程调试端口的 Chrome，通过 CDP 检查对比页和 Grok iframe。成功握手会出现 `Network.webSocketHandshakeResponseReceived`，状态码为 `101`。修复后的预期流程如下：
+
+1. The comparison tab sends `PREPARE_GROK_CONNECTION` before assigning the Grok iframe URL. / 对比页在设置 Grok iframe 地址前发送 `PREPARE_GROK_CONNECTION`。
+2. The service worker installs the tab-scoped rule. / Service Worker 安装标签页级规则。
+3. The iframe handshake contains the three Grok session cookies and receives status `101`. / iframe 握手包含三个 Grok 会话 Cookie，并收到 `101`。
+4. A test prompt receives a normal response; a service-side capacity message such as “Grok 当前使用人数较多” is separate from the WebSocket/network fix. / 测试提示词收到正常回答；“Grok 当前使用人数较多”等服务端容量提示与 WebSocket 网络修复无关。
+
+The regression test is `tests/grok-websocket-auth.test.cjs`. It verifies endpoint and tab scoping, partition filtering, login/logout refresh, message validation, and stale-rule cleanup. / 回归测试为 `tests/grok-websocket-auth.test.cjs`，覆盖接口和标签页限定、分区 Cookie 过滤、登录/退出刷新、消息校验和旧规则清理。
 
 ## Adding New AI Sites / 添加新的 AI 站点
 

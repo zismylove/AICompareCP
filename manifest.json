@@ -6,6 +6,7 @@
   "minimum_chrome_version": "114",
   "permissions": [
     "storage",
+    "cookies",
     "activeTab",
     "tabs",
     "contextMenus",

@@ -1,4 +1,5 @@
 importScripts('./config/baseConfig.js');     // 加载基础配置（包含开发环境配置）
+importScripts('./background/grok-websocket-auth.js');
 
 const COMPARISON_PAGE_PATH = 'iframe/iframe.html';
 const COMPARISON_PAGE_URL = chrome.runtime.getURL(COMPARISON_PAGE_PATH);
@@ -256,13 +257,13 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 // 在扩展启动时检查规则
 chrome.declarativeNetRequest.getSessionRules().then(rules => {
-  console.log('当前生效的规则:', rules);
+  console.log('当前生效的规则 ID:', rules.map(rule => rule.id));
 });
 
 
 // 如果规则为空，尝试动态添加规则
 chrome.declarativeNetRequest.updateSessionRules({
-  removeRuleIds: [999], // 先清除可能存在的规则 999
+  removeRuleIds: [999, 998], // 同时移除旧的、无效的 WebSocket 请求头试验规则
   addRules: [{
     "id": 999,
     "priority": 1,
@@ -305,10 +306,9 @@ chrome.declarativeNetRequest.updateSessionRules({
     }
   }]
 }).then(() => {
-  // 再次检查规则
   return chrome.declarativeNetRequest.getSessionRules();
 }).then(rules => {
-  console.log('更新后的规则:', rules);
+  console.log('更新后的规则 ID:', rules.map(rule => rule.id));
 });
 
 
@@ -396,14 +396,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // 处理来自 iframe 的消息
-chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'executeHandler') {
-    const siteHandler = await getHandlerForUrl(message.url);
-    if (siteHandler && siteHandler.searchHandler) {
-      executeSiteHandler(sender.tab.id, message.query, siteHandler).catch(error => {
-        console.error('站点处理失败:', error);
-      });
-    }
+    // Only return a Promise for messages handled here. An async listener would
+    // also answer unrelated messages before the Grok readiness listener does.
+    return getHandlerForUrl(message.url).then(siteHandler => {
+      if (siteHandler && siteHandler.searchHandler) {
+        return executeSiteHandler(sender.tab.id, message.query, siteHandler);
+      }
+    }).catch(error => console.error('站点处理失败:', error));
   }
 });
 
