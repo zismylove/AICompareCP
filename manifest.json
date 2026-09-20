@@ -3,13 +3,14 @@
   "name": "__MSG_appName__",
   "version": "2.15.0",
   "description": "__MSG_extDescription__",
+  "minimum_chrome_version": "114",
   "permissions": [
     "storage",
+    "cookies",
     "activeTab",
     "tabs",
     "contextMenus",
     "declarativeNetRequest",
-    "sidePanel",
     "clipboardRead",
     "omnibox"
   ],
@@ -39,6 +40,15 @@
   },
 
   "content_scripts": [
+    {
+      "matches": ["https://claude.ai/*"],
+      "js": [
+        "iframe/claude-model-fix.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "world": "MAIN"
+    },
     {
       "matches": ["<all_urls>"],
       "js": [
@@ -90,7 +100,6 @@
     ],
     "use_dynamic_url": true,
     "matches": [
-      "chrome-extension://*/*",
       "<all_urls>"
     ]
   }, {
@@ -111,11 +120,6 @@
       "enabled": true,
       "path": "config/rules.json"
     }]
-  },
-
-
-  "side_panel": {
-    "default_path": "iframe/iframe.html"
   },
 
   "omnibox": {

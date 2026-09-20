@@ -17,19 +17,27 @@
 
 ### How to Use:
 
-😄 Download the extention
+😄 Download the extension
 
-chrome：https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl
+Recommended browser version: Chrome 114+
 
+Chrome Web Store: https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl
 
-edge：https://microsoftedge.microsoft.com/addons/detail/ai-%E4%BB%BB%E6%84%8F%E9%97%A8-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo （This is an old version and not recommended for use. The latest version has not yet been approved.）
+Chrome local development / unpacked:
+
+1. Open `chrome://extensions/`
+2. Enable Developer mode
+3. Click `Load unpacked`
+4. Select this project folder
+
+Edge legacy listing: https://microsoftedge.microsoft.com/addons/detail/ai-%E4%BB%BB%E6%84%8F%E9%97%A8-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo (old listing kept for reference only)
 
 🎉 Pin the extension to the toolbar and click the extension icon.
 Access the Multi-AI collection page, enter a keyword once, and view results from multiple AIs on a single page.
 
 🤖 Click the toolbar button / use the shortcut key
 
-Click the extension button or press the shortcut key (⌘+M on Mac, Ctrl+M on Windows) to activate the window. After entering a keyword, 1) you can quickly access your frequently used AI sites for fast queries. 2) You can open multiple AI sites at once, loading results simultaneously to save time and compare them.
+Click the extension button or press the shortcut key (⌘+M on Mac, Ctrl+M on Windows) to open the Chrome comparison tab. After entering a keyword, 1) you can quickly access your frequently used AI sites for fast queries. 2) You can open multiple AI sites at once, loading results simultaneously to save time and compare them.
 
 🏂 Select webpage content
 
@@ -44,6 +52,30 @@ Click to enter tab mode. For users who frequently compare results across multipl
 Single-site configuration: Use the dropdown menu to select your most commonly used AI site.
 
 Multi-site configuration: Enter the AI comparison configuration to select multiple sites.
+
+### Chrome Architecture
+
+This project now uses a tab-first Chrome Extension Manifest V3 architecture.
+
+1. `manifest.json`: Declares the Chrome MV3 extension entry, permissions, content scripts, omnibox integration, and web accessible resources.
+2. `background.js`: Works as the service worker hub for toolbar clicks, keyboard shortcuts, floating-button messages, selection actions, context menus, and tab orchestration.
+3. `iframe/iframe.html` + `iframe/iframe.js`: Render the multi-AI comparison experience inside a normal Chrome tab rather than a side panel.
+4. `iframe/inject.js` + `config/siteHandlers.json`: Execute site-specific automation steps so each AI page receives and submits the query correctly.
+5. `content-scripts/`: Inject entry points into normal web pages, selected text flows, and search engine result pages.
+6. `options/` + `chrome.storage.sync/local`: Store user preferences, site settings, prompt templates, and cached site configurations.
+7. `background/grok-websocket-auth.js`: Keeps Grok's authenticated WebSocket handshake working when Grok is embedded in the comparison tab. The rule is limited to comparison tabs and the Grok chat endpoint.
+
+Chrome runtime flow:
+
+1. The user enters through the toolbar icon, `Ctrl/⌘+M`, floating button, selected-text action, context menu, or omnibox.
+2. `background.js` opens or focuses `iframe/iframe.html` in a Chrome tab.
+3. Iframe-supported AI sites are loaded together in the comparison tab.
+4. Sites that do not support iframes are opened or reused as normal Chrome tabs.
+5. `inject.js` applies the configured handler steps to input the query and trigger submission.
+
+Grok iframe note: Chrome may omit Grok's `SameSite=Lax`/`Strict` session cookies from the embedded WebSocket handshake even though normal HTTPS requests work. The service worker uses the `cookies` permission and a tab-scoped declarative request rule to append the current `sso`, `sso-rw`, and `grok_device_id` cookies only to `wss://grok.com/ws/mgw/`. Closing the comparison tab or logging out clears the temporary rule.
+
+For a more detailed breakdown, see `DEVELOPER_GUIDE.md`.
 
 ### Any questions or suggestions?
 
@@ -71,12 +103,20 @@ This project is licensed under the GNU General Public License v3.0.
 
 ### 使用方式
 
-😄下载扩展
+😄 下载扩展
 
-chrome：https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl 
+推荐浏览器版本：Chrome 114+
 
+Chrome 应用商店：https://chromewebstore.google.com/detail/multi-ai/dkhpgbbhlnmjbkihoeniojpkggkabbbl 
 
-edge：https://microsoftedge.microsoft.com/addons/detail/ai%E6%AF%94%E4%B8%80%E6%AF%94-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo ( 新版本一直审核不通过，所以版本较老)
+Chrome 本地加载（开发模式）：
+
+1. 打开 `chrome://extensions/`
+2. 开启“开发者模式”
+3. 点击“加载已解压缩的扩展程序”
+4. 选择当前项目目录
+
+Edge 旧版地址（仅历史保留，当前以 Chrome 版为主）：https://microsoftedge.microsoft.com/addons/detail/ai%E6%AF%94%E4%B8%80%E6%AF%94-%E5%BF%AB%E9%80%9F%E8%AE%BF%E9%97%AE-chatgpt-%E8%B1%86%E5%8C%85-/pehoogkkiaidofipnnafdpcfbkhkhddo
 
 
 
@@ -85,7 +125,7 @@ edge：https://microsoftedge.microsoft.com/addons/detail/ai%E6%AF%94%E4%B8%80%E6
 
 🤖 点击工具栏按钮 / 快捷键
 
-点击扩展按钮或者输入快捷键（⌘+M in Mac, Ctrl+M in Windows），激活窗口，输入关键词后， 1） 可以一键进入常用 AI 站点，实现快速查询 2） 同时打开多个 AI 站点，同时加载结果，节省时间，实现结果的对比。
+点击扩展按钮或者输入快捷键（⌘+M in Mac, Ctrl+M in Windows），会打开 Chrome 对比标签页。输入关键词后，1）可以一键进入常用 AI 站点，实现快速查询；2）可以同时打开多个 AI 站点，同时加载结果，节省时间，实现结果对比。
 
 🏂 选择网页内容
 
@@ -100,6 +140,30 @@ edge：https://microsoftedge.microsoft.com/addons/detail/ai%E6%AF%94%E4%B8%80%E6
 单站点配置：下拉菜单，即可选择最常用的AI 站点
 
 多站点配置：进入AI 对比配置，即可选择
+
+### 谷歌浏览器架构
+
+当前项目采用以标签页为中心的 Chrome Extension Manifest V3 架构。
+
+1. `manifest.json`：声明 Chrome MV3 扩展入口、权限、内容脚本、omnibox 集成和可访问资源。
+2. `background.js`：作为 service worker 中枢，统一处理工具栏点击、快捷键、浮动按钮消息、划词动作、右键菜单和标签页调度。
+3. `iframe/iframe.html` + `iframe/iframe.js`：在普通 Chrome 标签页中承载多 AI 对比界面，而不是侧边栏。
+4. `iframe/inject.js` + `config/siteHandlers.json`：执行各个 AI 网站的自动化输入、点击、粘贴和提交逻辑。
+5. `content-scripts/`：把快捷入口注入普通网页、划词流程和搜索引擎结果页。
+6. `options/` + `chrome.storage.sync/local`：保存用户偏好、站点设置、提示词模板和缓存的站点配置。
+7. `background/grok-websocket-auth.js`：处理 Grok 嵌入对比页时的登录 WebSocket 握手，规则只作用于对比标签页和 Grok 聊天接口。
+
+Chrome 运行流程：
+
+1. 用户通过工具栏图标、`Ctrl/⌘+M`、浮动按钮、划词操作、右键菜单或 omnibox 进入扩展。
+2. `background.js` 打开或激活 `iframe/iframe.html` 对比标签页。
+3. 支持 iframe 的 AI 站点会一起加载到对比标签页中。
+4. 不支持 iframe 的站点会以普通 Chrome 标签页方式打开或复用。
+5. `inject.js` 根据站点配置执行自动化步骤，把查询写入页面并触发提交。
+
+Grok iframe 说明：Chrome 可能在 Grok 被嵌入对比页时，省略 WebSocket 握手中的 `SameSite=Lax`/`Strict` 登录 Cookie，而普通 HTTPS 请求仍然正常。Service Worker 使用 `cookies` 权限读取当前登录态，并通过按标签页限定的声明式请求规则，仅向 `wss://grok.com/ws/mgw/` 补充 `sso`、`sso-rw` 和 `grok_device_id`。关闭对比页或退出登录后，临时规则会被清理。
+
+更详细的架构拆解请查看 `DEVELOPER_GUIDE.md`。
 
 
 ### 任何问题和建议

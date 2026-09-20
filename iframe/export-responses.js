@@ -73,13 +73,13 @@ function showExportModal() {
   modal.innerHTML = `
     <div class="export-modal-content">
       <div class="export-modal-header">
-        <h3 class="export-modal-title">📄 ${getI18nMessage('exportModalTitle', '导出AI回答')}</h3>
+        <h3 class="export-modal-title">📄 ${getI18nMessage('exportModalTitle', '导出完整对话')}</h3>
         <button class="export-close-btn" id="exportCloseBtn">×</button>
       </div>
       
         <div class="export-dev-notice">
           <div class="export-dev-notice-content">
-            ⚠️ ${getI18nMessage('devNotice', '功能在开发中，可能会有错误或不足')}
+            ${getI18nMessage('devNotice', '将导出所选页面中的全部问题和回答')}
           </div>
         </div>
       
@@ -87,8 +87,8 @@ function showExportModal() {
         <div class="export-option-group">
           <label class="export-option-label">${getI18nMessage('exportFormat', '导出格式')}</label>
           <div class="export-format-buttons">
-            <button class="export-format-btn active" data-format="markdown">📝 Markdown</button>
-            <button class="export-format-btn" data-format="txt">📄 纯文本</button>
+            <button class="export-format-btn" data-format="markdown">📝 Markdown</button>
+            <button class="export-format-btn active" data-format="txt">📄 纯文本</button>
             <button class="export-format-btn" data-format="html">🌐 HTML</button>
           </div>
         </div>
@@ -132,7 +132,7 @@ function initializeExportModal(modal) {
   const siteSelection = modal.querySelector('#exportSiteSelection');
   const previewContent = modal.querySelector('#exportPreviewContent');
   
-  let selectedFormat = 'markdown';
+  let selectedFormat = 'txt';
   let selectedSites = new Set();
   
   // 关闭模态框
@@ -226,7 +226,7 @@ function initializeExportModal(modal) {
       
       // 执行导出
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const filename = `ai-responses-${timestamp}.${selectedFormat === 'txt' ? 'txt' : selectedFormat}`;
+      const filename = `ai-conversations-${timestamp}.${selectedFormat === 'txt' ? 'txt' : selectedFormat}`;
       const mimeType = selectedFormat === 'html' ? 'text/html' : 
                       selectedFormat === 'txt' ? 'text/plain' : 'text/markdown';
       
@@ -250,15 +250,16 @@ function loadExportSites(container, modal) {
   const iframes = document.querySelectorAll('.ai-iframe');
   const selectedSites = new Set();
   
-  iframes.forEach(iframe => {
+  iframes.forEach((iframe, index) => {
     const siteName = iframe.getAttribute('data-site');
     if (!siteName) return;
+    const checkboxId = `export-site-${index}`;
     
     const siteItem = document.createElement('div');
     siteItem.className = 'export-site-item';
     siteItem.innerHTML = `
-      <input type="checkbox" class="export-site-checkbox" id="site-${siteName}" checked>
-      <label class="export-site-name" for="site-${siteName}">${siteName}</label>
+      <input type="checkbox" class="export-site-checkbox" id="${checkboxId}" checked>
+      <label class="export-site-name" for="${checkboxId}">${siteName}</label>
     `;
     
     // 添加到选中列表
@@ -419,21 +420,25 @@ async function collectResponses(selectedSites) {
       console.log(`🔍 [DEBUG] extractResult 类型:`, typeof extractResult, extractResult);
       
       // 处理新的返回格式
-      let content, extractionMethod, extractedUrl;
+      let content, extractionMethod, extractedUrl, turns, pageTitle;
       
       // 统一处理为字符串格式
       if (typeof extractResult === 'string') {
         content = extractResult;
         extractionMethod = '配置方法';
         extractedUrl = iframeUrl;
+        turns = [];
       } else if (extractResult && typeof extractResult === 'object') {
         content = extractResult.content || '';
         extractionMethod = extractResult.extractionMethod || '配置方法';
         extractedUrl = extractResult.url || iframeUrl;
+        turns = Array.isArray(extractResult.turns) ? extractResult.turns : [];
+        pageTitle = extractResult.pageTitle || '';
       } else {
         content = '';
         extractionMethod = 'failed';
         extractedUrl = iframeUrl;
+        turns = [];
       }
       
       // 使用从iframe中提取的URL
@@ -448,6 +453,8 @@ async function collectResponses(selectedSites) {
           content: content.trim(),
           timestamp: new Date().toISOString(),
           extractionMethod: extractionMethod,
+          turns: turns,
+          pageTitle: pageTitle,
           length: content.length,
           url: finalUrl
         };
@@ -1048,17 +1055,25 @@ async function getSiteContentExtractorConfig(siteName) {
 // 通过消息通信请求iframe内容
 function requestIframeContent(iframe, siteName) {
   return new Promise((resolve, reject) => {
+    const requestId = `${siteName}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const timeout = setTimeout(() => {
+      window.removeEventListener('message', messageHandler);
       reject(new Error('请求超时'));
     }, 5000);
     
     const messageHandler = (event) => {
-      if (event.data.type === 'EXTRACTED_CONTENT' && event.data.siteName === siteName) {
+      if (event.source === iframe.contentWindow &&
+          event.data.type === 'EXTRACTED_CONTENT' &&
+          event.data.siteName === siteName &&
+          event.data.requestId === requestId) {
         clearTimeout(timeout);
         window.removeEventListener('message', messageHandler);
         // 返回包含内容和URL的对象
         resolve({
           content: event.data.content,
+          turns: Array.isArray(event.data.turns) ? event.data.turns : [],
+          extractionMethod: event.data.extractionMethod,
+          pageTitle: event.data.pageTitle,
           url: event.data.url || iframe.src
         });
       }
@@ -1069,7 +1084,8 @@ function requestIframeContent(iframe, siteName) {
     // 发送提取内容请求
     iframe.contentWindow.postMessage({
       type: 'EXTRACT_CONTENT',
-      siteName: siteName
+      siteName: siteName,
+      requestId: requestId
     }, '*');
   });
 }
@@ -1137,26 +1153,26 @@ function generatePreview(responses, format) {
 // 生成导出内容
 function generateExportContent(responses, format) {
   const timestamp = new Date().toLocaleString();
-  const query = document.getElementById('searchInput').value || '未指定查询';
+  const exportedSites = responses.map(response => response.siteName).join('、');
   
   let content = '';
   
   if (format === 'markdown') {
-    content = `# AI回答汇总\n\n`;
-    content += `**查询内容:** ${query}\n`;
+    content = `# AI完整对话导出\n\n`;
     content += `**导出时间:** ${timestamp}\n`;
-    content += `**包含站点:** ${responses.length} 个\n\n`;
+    content += `**导出页面:** ${exportedSites}\n\n`;
     content += `---\n\n`;
     
     responses.forEach((response, responseIndex) => {
       content += `## ${response.siteName}\n\n`;
+      content += `**导出页面:** ${response.siteName}\n\n`;
       
       // 添加 iframe 的完整 URL
       if (response.url && response.url !== 'unknown') {
         content += `**URL:** ${response.url}\n\n`;
       }
       
-      content += response.content + '\n\n';
+      content += formatResponseConversation(response, 'markdown') + '\n\n';
       
       // 提取方法只在控制台输出，不显示给用户
       if (response.extractionMethod) {
@@ -1172,7 +1188,7 @@ function generateExportContent(responses, format) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI回答汇总</title>
+    <title>AI完整对话导出</title>
     <style>
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; line-height: 1.6; }
         h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
@@ -1186,22 +1202,22 @@ function generateExportContent(responses, format) {
     </style>
 </head>
 <body>
-    <h1>AI回答汇总</h1>
+    <h1>AI完整对话导出</h1>
     <div class="meta">
-        <p><strong>查询内容:</strong> ${query}</p>
         <p><strong>导出时间:</strong> ${timestamp}</p>
-        <p><strong>包含站点:</strong> ${responses.length} 个</p>
+        <p><strong>导出页面:</strong> ${escapeHtml(exportedSites)}</p>
     </div>`;
     
     responses.forEach((response, responseIndex) => {
       content += `<h2>${response.siteName}</h2>`;
+      content += `<p><strong>导出页面:</strong> ${escapeHtml(response.siteName)}</p>`;
       
       // 添加 iframe 的完整 URL
       if (response.url && response.url !== 'unknown') {
         content += `<p><strong>URL:</strong> <a href="${response.url}" target="_blank">${response.url}</a></p>`;
       }
       
-      content += `<div>${response.content.replace(/\n/g, '<br>')}</div>`;
+      content += `<div>${formatResponseConversation(response, 'html')}</div>`;
       
       // 提取方法只在控制台输出，不显示给用户
       if (response.extractionMethod) {
@@ -1216,14 +1232,13 @@ function generateExportContent(responses, format) {
     content += `</body></html>`;
     
   } else { // txt format
-    content = `AI回答汇总\n\n`;
-    content += `查询内容: ${query}\n`;
+    content = `AI完整对话导出\n\n`;
     content += `导出时间: ${timestamp}\n`;
-    content += `包含站点: ${responses.length} 个\n\n`;
+    content += `导出页面: ${exportedSites}\n\n`;
     content += `${'='.repeat(50)}\n\n`;
     
     responses.forEach((response, responseIndex) => {
-      content += `${response.siteName}\n`;
+      content += `导出页面: ${response.siteName}\n`;
       content += `${'-'.repeat(response.siteName.length)}\n\n`;
       
       // 添加 iframe 的完整 URL
@@ -1231,7 +1246,7 @@ function generateExportContent(responses, format) {
         content += `URL: ${response.url}\n\n`;
       }
       
-      content += response.content + '\n\n';
+      content += formatResponseConversation(response, 'txt') + '\n\n';
       
       // 提取方法只在控制台输出，不显示给用户
       if (response.extractionMethod) {
@@ -1243,6 +1258,59 @@ function generateExportContent(responses, format) {
   }
   
   return content;
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatResponseConversation(response, format) {
+  const turns = Array.isArray(response.turns) ? response.turns : [];
+  if (turns.length === 0) {
+    if (format === 'html') {
+      return escapeHtml(response.content).replace(/\n/g, '<br>');
+    }
+    return response.content;
+  }
+
+  if (format === 'markdown') {
+    return turns.map((turn, index) => [
+      `### 第 ${index + 1} 轮`,
+      '',
+      '**问题：**',
+      turn.question || '（未提取到问题）',
+      '',
+      '**回答：**',
+      turn.answer || '（未提取到回答）'
+    ].join('\n')).join('\n\n---\n\n');
+  }
+
+  if (format === 'html') {
+    return turns.map((turn, index) => `
+      <section class="conversation-turn">
+        <h3>第 ${index + 1} 轮</h3>
+        <p><strong>问题：</strong></p>
+        <div>${escapeHtml(turn.question || '（未提取到问题）').replace(/\n/g, '<br>')}</div>
+        <p><strong>回答：</strong></p>
+        <div>${escapeHtml(turn.answer || '（未提取到回答）').replace(/\n/g, '<br>')}</div>
+      </section>
+    `).join('<hr>');
+  }
+
+  return turns.map((turn, index) => [
+    `第 ${index + 1} 轮`,
+    '',
+    '问题：',
+    turn.question || '（未提取到问题）',
+    '',
+    '回答：',
+    turn.answer || '（未提取到回答）'
+  ].join('\n')).join(`\n\n${'-'.repeat(50)}\n\n`);
 }
 
 // 执行导出

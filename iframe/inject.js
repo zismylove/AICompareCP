@@ -1069,8 +1069,12 @@ window.addEventListener('message', async function(event) {
         // 使用 async/await 处理异步内容提取
         (async () => {
             try {
-                // 提取页面内容
-                const content = await extractPageContent();
+                // 优先提取完整的结构化对话（用户问题 + AI 回答）
+                const conversation = extractStructuredConversation(event.data.siteName);
+                const turns = conversation ? conversation.turns : [];
+                const content = turns.length > 0
+                    ? formatConversationTurnsAsText(turns)
+                    : await extractPageContent();
                 
                 // 提取当前页面的URL（去掉locale等参数）
                 let pageUrl = window.location.href;
@@ -1095,7 +1099,11 @@ window.addEventListener('message', async function(event) {
                 window.parent.postMessage({
                     type: 'EXTRACTED_CONTENT',
                     siteName: event.data.siteName,
+                    requestId: event.data.requestId,
                     content: content,
+                    turns: turns,
+                    extractionMethod: turns.length > 0 ? 'structured-conversation' : 'configured-content',
+                    pageTitle: document.title,
                     url: pageUrl
                 }, '*');
                 
@@ -1107,7 +1115,10 @@ window.addEventListener('message', async function(event) {
                 window.parent.postMessage({
                     type: 'EXTRACTED_CONTENT',
                     siteName: event.data.siteName,
-                    content: `内容提取失败: ${error.message}`
+                    requestId: event.data.requestId,
+                    content: `内容提取失败: ${error.message}`,
+                    turns: [],
+                    extractionMethod: 'failed'
                 }, '*');
             }
         })();
@@ -1251,6 +1262,130 @@ function showClipboardPermissionTip() {
   console.log('提示: 需要用户授权剪切板访问权限');
   console.log('解决方法: 请重新加载扩展以应用新的权限设置');
   console.log('或者点击页面获得焦点后重试');
+}
+
+function normalizeConversationText(text) {
+    return String(text || '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .replace(/\n[ \t]+/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+}
+
+function getConversationElementText(element) {
+    if (!element) return '';
+
+    const visibleText = normalizeConversationText(element.innerText);
+    if (visibleText) return visibleText;
+
+    return normalizeConversationText(element.textContent);
+}
+
+function getFirstConversationText(root, selectors) {
+    for (const selector of selectors) {
+        const element = root.querySelector(selector);
+        const text = getConversationElementText(element);
+        if (text) return text;
+    }
+    return '';
+}
+
+function pairConversationMessages(questions, answers) {
+    const turnCount = Math.max(questions.length, answers.length);
+    const turns = [];
+
+    for (let index = 0; index < turnCount; index++) {
+        const question = normalizeConversationText(questions[index]);
+        const answer = normalizeConversationText(answers[index]);
+        if (question || answer) {
+            turns.push({ question, answer });
+        }
+    }
+
+    return turns;
+}
+
+function extractStructuredConversation(siteName) {
+    const normalizedSiteName = String(siteName || '').toLowerCase();
+    let turns = [];
+
+    if (normalizedSiteName === 'grok' || window.location.hostname.includes('grok.com')) {
+        const questions = Array.from(document.querySelectorAll('[data-testid="user-message"]'))
+            .map(getConversationElementText);
+        const answers = Array.from(document.querySelectorAll('[data-testid="assistant-message"]'))
+            .map(container => getFirstConversationText(container, [
+                '.response-content-markdown',
+                '.markdown',
+                '.prose'
+            ]));
+        turns = pairConversationMessages(questions, answers);
+    } else if (normalizedSiteName === 'claude' || window.location.hostname.includes('claude.ai')) {
+        const questions = Array.from(document.querySelectorAll('[data-testid="user-message"]'))
+            .map(getConversationElementText);
+        const answers = Array.from(document.querySelectorAll('.font-claude-response'))
+            .map(container => getFirstConversationText(container, [
+                '.standard-markdown',
+                '.progressive-markdown',
+                '[data-testid="ai-message"]'
+            ]));
+        turns = pairConversationMessages(questions, answers);
+    } else if (normalizedSiteName === 'chatgpt' || window.location.hostname.includes('chatgpt.com')) {
+        let pendingQuestion = '';
+        const messages = document.querySelectorAll('[data-message-author-role]');
+
+        for (const message of messages) {
+            const role = message.getAttribute('data-message-author-role');
+            if (role === 'user') {
+                pendingQuestion = getConversationElementText(message);
+            } else if (role === 'assistant') {
+                const answer = getFirstConversationText(message, ['.markdown', '.prose'])
+                    || getConversationElementText(message);
+                if (pendingQuestion || answer) {
+                    turns.push({ question: pendingQuestion, answer });
+                }
+                pendingQuestion = '';
+            }
+        }
+
+        if (pendingQuestion) {
+            turns.push({ question: pendingQuestion, answer: '' });
+        }
+    } else if (normalizedSiteName === 'gemini' || window.location.hostname.includes('gemini.google.com')) {
+        const containers = document.querySelectorAll('.conversation-container');
+        for (const container of containers) {
+            const question = getFirstConversationText(container, [
+                'user-query .query-text-line',
+                'user-query .query-text',
+                '.query-content'
+            ]);
+            const answer = getFirstConversationText(container, [
+                'model-response .model-response-text',
+                'model-response message-content',
+                'model-response'
+            ]);
+            if (question || answer) {
+                turns.push({ question, answer });
+            }
+        }
+    }
+
+    return turns.length > 0 ? { turns } : null;
+}
+
+function formatConversationTurnsAsText(turns) {
+    return turns.map((turn, index) => {
+        return [
+            `第 ${index + 1} 轮`,
+            '',
+            '问题：',
+            turn.question || '（未提取到问题）',
+            '',
+            '回答：',
+            turn.answer || '（未提取到回答）'
+        ].join('\n');
+    }).join(`\n\n${'-'.repeat(50)}\n\n`);
 }
 
 // 提取页面内容
