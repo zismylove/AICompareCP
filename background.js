@@ -40,13 +40,6 @@ async function initializeLocalConfig() {
   try {
     console.log('开始从本地文件初始化配置...');
     
-    // 检查是否已经有 remoteSiteHandlers 数据
-    const existingData = await chrome.storage.local.get('remoteSiteHandlers');
-    if (existingData.remoteSiteHandlers && existingData.remoteSiteHandlers.sites) {
-      console.log('remoteSiteHandlers 已存在，跳过本地初始化');
-      return;
-    }
-    
     // 从本地文件读取配置
     const response = await fetch(chrome.runtime.getURL('config/siteHandlers.json'));
     if (!response.ok) {
@@ -57,20 +50,35 @@ async function initializeLocalConfig() {
     if (!localConfig.sites || localConfig.sites.length === 0) {
       throw new Error('本地配置文件中没有站点数据');
     }
+
+    const localVersion = localConfig.version || '1.0.0';
     
-    // 将本地配置存储到 chrome.storage.local
-    await chrome.storage.local.set({
-      siteConfigVersion: localConfig.version || Date.now(),
-      remoteSiteHandlers: localConfig
-    });
-    
-    console.log('本地配置初始化成功，站点数量:', localConfig.sites.length);
-    console.log('配置版本:', localConfig.version || Date.now());
+    // 检查是否已经有 remoteSiteHandlers 数据
+    const existingData = await chrome.storage.local.get(['remoteSiteHandlers', 'siteConfigVersion']);
+    const storedVersion = existingData.siteConfigVersion || existingData.remoteSiteHandlers?.version;
+
+    // 如果未存储过配置，或者本地文件版本 >= 已存储版本，则同步更新
+    const shouldUpdate = !existingData.remoteSiteHandlers || 
+                         !storedVersion || 
+                         (typeof compareVersions === 'function' ? compareVersions(localVersion, storedVersion) >= 0 : true);
+
+    if (shouldUpdate) {
+      await chrome.storage.local.set({
+        siteConfigVersion: localVersion,
+        remoteSiteHandlers: localConfig
+      });
+      console.log('本地配置同步成功，站点数量:', localConfig.sites.length, '版本:', localVersion);
+    } else {
+      console.log('remoteSiteHandlers 已存在且版本较新，跳过覆盖，当前版本:', storedVersion);
+    }
     
   } catch (error) {
     console.error('本地配置初始化失败:', error);
   }
 }
+
+// 脚本加载时立即触发本地配置同步
+initializeLocalConfig();
 
 // 初始化默认提示词模板
 async function initializeDefaultPromptTemplates() {
@@ -144,6 +152,9 @@ chrome.runtime.onStartup.addListener(async () => {
     // 开发环境调试：显示当前扩展ID
     logExtensionIdForDevelopment();
     
+    // 扩展启动时确保本地配置与最新文件同步
+    await initializeLocalConfig();
+    
     console.log('扩展启动，检查站点配置更新...');
     if (self.RemoteConfigManager) {
       const updateInfo = await self.RemoteConfigManager.autoCheckUpdate();
@@ -175,13 +186,11 @@ chrome.runtime.onInstalled.addListener(async (details) => {
     // 初始化默认提示词模板
     await initializeDefaultPromptTemplates();
     
+    // 安装或更新扩展时，先与本地最新文件配置同步
+    await initializeLocalConfig();
+    
     // 检查配置更新
     if (self.RemoteConfigManager) {
-      // 首次安装时，先从本地文件初始化配置
-      if (details.reason === 'install') {
-        console.log('首次安装，从本地文件初始化配置');
-        await initializeLocalConfig();
-      }
       
       // 然后检查远程配置更新
       console.log('开始检查站点配置更新...');

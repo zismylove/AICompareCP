@@ -6,7 +6,7 @@ if (typeof window !== 'undefined' && window.BaseConfigLoaded) {
 
 // 开发环境配置
 const DEV_CONFIG = {
-  IS_PRODUCTION: true,  // 开发时设为 false，发布时设为 true
+  IS_PRODUCTION: false,  // 开发时设为 false，发布时设为 true
   SKIP_REMOTE_CONFIG: true,  // 开发时跳过远程配置，直接使用本地文件
   ENABLE_CONFIG_CACHE: false, // 开发时禁用配置缓存，确保修改立即生效
   FORCE_LOCAL_CONFIG: true   // 开发时强制使用本地配置文件
@@ -671,6 +671,7 @@ if (typeof window === 'undefined') {
   self.RemoteConfigManager = RemoteConfigManager;
   self.PromptPrefixManager = PromptPrefixManager;
   self.FeatureFlags = FEATURE_FLAGS;
+  self.compareVersions = compareVersions;
   
   // 开发环境配置切换函数
   self.toggleDevMode = function() {
@@ -784,6 +785,7 @@ else {
   window.RemoteConfigManager = RemoteConfigManager;
   window.PromptPrefixManager = PromptPrefixManager;
   window.FeatureFlags = FEATURE_FLAGS;
+  window.compareVersions = compareVersions;
   
   // 开发环境配置切换函数
   window.toggleDevMode = function() {

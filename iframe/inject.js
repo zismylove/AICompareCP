@@ -362,23 +362,7 @@ async function executePaste(step) {
 
 // 执行点击操作
 async function executeClick(step) {
-  let element = null;
-  let foundSelector = null;
-  
-  // 支持多个选择器
   const selectors = Array.isArray(step.selector) ? step.selector : [step.selector];
-  
-  for (const selector of selectors) {
-    element = document.querySelector(selector);
-    if (element) {
-      foundSelector = selector;
-      break;
-    }
-  }
-  
-  if (!element) {
-    throw new Error(`未找到任何元素，尝试的选择器: ${selectors.join(', ')}`);
-  }
   
   if (step.condition) {
     // 检查条件
@@ -389,31 +373,87 @@ async function executeClick(step) {
     }
   }
 
-  // 如果指定了重试机制，则使用重试逻辑
+  // 如果指定了重试机制，则使用支持异步轮询的重试逻辑
   if (step.retryOnDisabled) {
-    const maxAttempts = step.maxAttempts || 5;
+    const maxAttempts = step.maxAttempts || 10;
     const retryInterval = step.retryInterval || 200;
-    let attempts = 0;
-    
-    const tryClick = () => {
-      if (!element.disabled) {
-        element.click();
-        console.log('点击元素:', foundSelector);
-        return;
-      }
-      
-      attempts++;
-      if (attempts < maxAttempts) {
-        console.log(`按钮被禁用，${retryInterval}ms后重试 (${attempts}/${maxAttempts})`);
-        setTimeout(tryClick, retryInterval);
-      } else {
-        console.error('达到最大尝试次数，按钮仍然被禁用');
-      }
-    };
-    
-    // 延迟100ms开始尝试，给页面一些时间
-    setTimeout(tryClick, 100);
+
+    await new Promise((resolve, reject) => {
+      let attempts = 0;
+
+      const tryClick = () => {
+        let element = null;
+        let foundSelector = null;
+
+        for (const selector of selectors) {
+          const el = document.querySelector(selector);
+          if (el) {
+            element = el;
+            foundSelector = selector;
+            break;
+          }
+        }
+
+        const isAriaDisabled = element && (element.getAttribute('aria-disabled') === 'true' || element.classList.contains('disabled'));
+        const isDisabled = element && (element.disabled || isAriaDisabled);
+
+        if (element && !isDisabled) {
+          try {
+            element.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, view: window }));
+          } catch (e) {}
+
+          if (element.type === 'submit' && element.form) {
+            try {
+              element.form.requestSubmit(element);
+              console.log('form.requestSubmit 成功:', foundSelector);
+              resolve();
+              return;
+            } catch (formError) {
+              // 降级使用 click
+            }
+          }
+
+          element.click();
+          console.log('点击元素成功:', foundSelector);
+          resolve();
+          return;
+        }
+
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`按钮未就绪或被禁用，${retryInterval}ms后重试 (${attempts}/${maxAttempts})`);
+          setTimeout(tryClick, retryInterval);
+        } else {
+          if (element) {
+            console.warn('达到最大尝试次数，进行强制点击:', foundSelector);
+            element.click();
+            resolve();
+          } else {
+            reject(new Error(`未找到任何元素，尝试的选择器: ${selectors.join(', ')}`));
+          }
+        }
+      };
+
+      // 延迟50ms开始尝试，给页面响应时间
+      setTimeout(tryClick, 50);
+    });
   } else {
+    let element = null;
+    let foundSelector = null;
+
+    for (const selector of selectors) {
+      element = document.querySelector(selector);
+      if (element) {
+        foundSelector = selector;
+        break;
+      }
+    }
+
+    if (!element) {
+      throw new Error(`未找到任何元素，尝试的选择器: ${selectors.join(', ')}`);
+    }
+
     element.click();
     console.log('点击元素:', foundSelector);
   }
@@ -464,14 +504,69 @@ async function executeSetValue(step, query) {
   }
 
   if (step.inputType === 'contenteditable') {
-    // 处理 contenteditable 元素
-    const pElement = element.querySelector('p');
-    if (pElement) {
-      pElement.innerText = query;
-    } else {
-      element.innerHTML = '<p></p>';
-      element.querySelector('p').innerText = query;
+    // 处理 contenteditable 元素（现代富文本编辑器如 ProseMirror, Lexical 等）
+    element.focus();
+
+    let inserted = false;
+    // 方式1：原生聚焦 + selectAll + insertText，最符合 ProseMirror/Lexical 编辑器事务
+    try {
+      document.execCommand('selectAll', false, null);
+      inserted = document.execCommand('insertText', false, query);
+    } catch (e) {
+      console.warn('execCommand selectAll + insertText 异常:', e);
     }
+
+    // 方式2：若未成功，定位到内部的段落 <p> 元素进行选区填充
+    if (!inserted || !element.innerText.includes(query)) {
+      try {
+        const targetNode = element.querySelector('p') || element;
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.selectNodeContents(targetNode);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          inserted = document.execCommand('insertText', false, query);
+        }
+      } catch (e) {
+        console.warn('子节点 execCommand insertText 异常:', e);
+      }
+    }
+
+    // 方式3：尝试 beforeinput 事件触发
+    if (!inserted || !element.innerText.includes(query)) {
+      try {
+        const beforeInputEvent = new InputEvent('beforeinput', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: query
+        });
+        element.dispatchEvent(beforeInputEvent);
+      } catch (e) {
+        console.warn('dispatch beforeinput 异常:', e);
+      }
+    }
+
+    // 方式4：DOM 降级直接赋值
+    if (!element.innerText.includes(query)) {
+      const pElement = element.querySelector('p');
+      if (pElement) {
+        pElement.innerText = query;
+      } else {
+        element.innerHTML = '<p></p>';
+        const newP = element.querySelector('p');
+        if (newP) {
+          newP.innerText = query;
+        } else {
+          element.innerText = query;
+        }
+      }
+    }
+
+    // 触发标准输入事件
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
   } else if (step.inputType === 'special') {
     // 使用配置驱动的特殊处理
     await executeSpecialSetValue(step, query, element);
@@ -658,17 +753,20 @@ async function executeTriggerEvents(step) {
   const events = step.events || ['input', 'change'];
   events.forEach(eventName => {
     if (eventName === 'input' && step.inputType === 'special') {
-      // 特殊输入事件
-      const inputEvent = new InputEvent('input', {
-        bubbles: true,
-        cancelable: true,
-        inputType: 'insertText',
-        data: element.value || element.innerText
-      });
-      element.dispatchEvent(inputEvent);
-    } else {
-      element.dispatchEvent(new Event(eventName, { bubbles: true }));
+      try {
+        const inputEvent = new InputEvent('input', {
+          bubbles: true,
+          cancelable: true,
+          inputType: 'insertText',
+          data: element.value || element.innerText || ''
+        });
+        element.dispatchEvent(inputEvent);
+        return;
+      } catch (e) {
+        // 降级使用普通 Event
+      }
     }
+    element.dispatchEvent(new Event(eventName, { bubbles: true }));
   });
 
   console.log('触发事件:', events, '在元素:', foundSelector);

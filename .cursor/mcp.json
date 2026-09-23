@@ -3,7 +3,9 @@
     "chrome-devtools": {
       "command": "C:\\Users\\HDDN\\AppData\\Roaming\\npm\\chrome-devtools-mcp.cmd",
       "args": [
+        "--autoConnect",
         "--category-extensions=true",
+        "--allowUnrestrictedPaths",
         "--no-usage-statistics",
         "--no-performance-crux"
       ]

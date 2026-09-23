@@ -48,36 +48,35 @@ class SiteDetector {
     try {
       let sites = [];
       
-      // 1. 优先从 chrome.storage.local 读取站点配置
-      try {
-        this.performanceStats.storageReads++;
-        const result = await chrome.storage.local.get('remoteSiteHandlers');
-        sites = result.remoteSiteHandlers?.sites || [];
-        if (sites.length > 0) {
-          console.log('✅ 从 chrome.storage.local 加载站点配置成功，数量:', sites.length);
-          console.log('📊 本地存储配置详情:', {
-            totalSites: sites.length,
-            hasContentExtractor: sites.filter(s => s.contentExtractor).length,
-            hasSearchHandler: sites.filter(s => s.searchHandler).length,
-            hasFileUploadHandler: sites.filter(s => s.fileUploadHandler).length
-          });
-        } else {
-          console.log('⚠️ chrome.storage.local 中的站点配置为空');
-        }
-      } catch (storageError) {
-        console.warn('❌ 从 chrome.storage.local 读取配置失败:', storageError);
-        console.warn('💡 可能的原因: 存储权限问题、数据损坏或首次使用');
-      }
+      // 1. 优先使用 getDefaultSites 获取（支持开发环境热加载与用户偏好合并）
+      const getDefSites = (typeof window !== 'undefined' && window.getDefaultSites) || 
+                          (typeof self !== 'undefined' && self.getDefaultSites);
       
-      // 2. 如果本地存储为空，尝试从 getDefaultSites 获取（降级）
-      if (!sites || sites.length === 0) {
+      if (getDefSites) {
         this.performanceStats.fallbackReads++;
-        if (typeof window !== 'undefined' && window.getDefaultSites) {
-          sites = await window.getDefaultSites();
-          console.log('✅ 从 getDefaultSites 加载站点配置成功，数量:', sites.length);
-        } else if (typeof self !== 'undefined' && self.getDefaultSites) {
-          sites = await self.getDefaultSites();
-          console.log('✅ 从 Service Worker getDefaultSites 加载站点配置成功，数量:', sites.length);
+        try {
+          sites = await getDefSites();
+          if (sites && sites.length > 0) {
+            console.log('✅ 从 getDefaultSites 加载站点配置成功，数量:', sites.length);
+          }
+        } catch (e) {
+          console.warn('从 getDefaultSites 获取失败，尝试降级读取存储:', e);
+        }
+      }
+
+      // 2. 降级：从 chrome.storage.local 读取站点配置
+      if (!sites || sites.length === 0) {
+        try {
+          this.performanceStats.storageReads++;
+          const result = await chrome.storage.local.get('remoteSiteHandlers');
+          sites = result.remoteSiteHandlers?.sites || [];
+          if (sites.length > 0) {
+            console.log('✅ 从 chrome.storage.local 加载站点配置成功，数量:', sites.length);
+          } else {
+            console.log('⚠️ chrome.storage.local 中的站点配置为空');
+          }
+        } catch (storageError) {
+          console.warn('❌ 从 chrome.storage.local 读取配置失败:', storageError);
         }
       }
 

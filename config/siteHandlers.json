@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1",
-  "lastUpdated": "2025-10-06T00:00:00Z",
-  "description": "支持粘贴功能",
+  "version": "1.1.3",
+  "lastUpdated": "2026-09-23T00:00:00Z",
+  "description": "更新 ChatGPT ProseMirror 输入框与提交按钮选择器，优化富文本交互",
   "author": "AIShortcuts",
   "sites": [
     {
@@ -12,34 +12,47 @@
       "region": "US",
       "hidden": false,
       "supportIframe": true,
-      "note": "",
+      "note": "更新支持ProseMirror可编辑容器及新版发送按钮",
       "searchHandler": {
         "steps": [
           {
             "action": "focus",
-            "selector": "#prompt-textarea",
+            "selector": [
+              "div.ProseMirror[contenteditable=\"true\"]",
+              "#prompt-textarea",
+              "div[role=\"textbox\"][contenteditable=\"true\"]",
+              "div[contenteditable=\"true\"]"
+            ],
             "description": "聚焦ChatGPT输入框"
           },
           {
             "action": "setValue",
-            "selector": "#prompt-textarea",
+            "selector": [
+              "div.ProseMirror[contenteditable=\"true\"]",
+              "#prompt-textarea",
+              "div[role=\"textbox\"][contenteditable=\"true\"]",
+              "div[contenteditable=\"true\"]"
+            ],
             "inputType": "contenteditable",
             "description": "设置ChatGPT输入框内容"
           },
           {
-            "action": "triggerEvents",
-            "selector": "#prompt-textarea",
-            "events": ["input", "change", "blur", "focus"],
-            "description": "触发输入事件"
-          },
-          {
             "action": "wait",
-            "duration": 100,
-            "description": "等待100ms"
+            "duration": 300,
+            "description": "等待300ms让发送按钮激活"
           },
           {
             "action": "click",
-            "selector": "button[data-testid=\"send-button\"]",
+            "selector": [
+              "button[type=\"submit\"]",
+              "button[aria-label=\"发送\"]",
+              "button[aria-label*=\"Send\"]",
+              "button[data-testid=\"send-button\"]",
+              "button[data-testid=\"fruitjuice-send-button\"]"
+            ],
+            "retryOnDisabled": true,
+            "maxAttempts": 10,
+            "retryInterval": 200,
             "description": "点击发送按钮"
           }
         ]
@@ -48,7 +61,12 @@
         "steps": [
           {
             "action": "focus",
-            "selector": "#prompt-textarea",
+            "selector": [
+              "div.ProseMirror[contenteditable=\"true\"]",
+              "#prompt-textarea",
+              "div[role=\"textbox\"][contenteditable=\"true\"]",
+              "div[contenteditable=\"true\"]"
+            ],
             "description": "聚焦ChatGPT输入框准备文件粘贴"
           },
           {
