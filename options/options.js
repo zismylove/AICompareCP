@@ -5,8 +5,8 @@ let promptPrefixSettingsInitialized = false;
 
 // 加载保存的配置
 async function loadConfig() {
-  // 直接从 initializeSiteConfigs 中处理站点配置加载
-  initializeSiteConfigs();
+  // 处理站点配置加载
+  await initializeSiteConfigs();
 
   chrome.storage.sync.get('buttonConfig', function(data) {
     currentButtonConfig = data.buttonConfig || window.defaultButtonConfig;
@@ -110,16 +110,6 @@ function initializeI18n() {
     }
   });
 }
-
-// 等待 DOM 加载完成后初始化
-document.addEventListener('DOMContentLoaded', () => {
-  console.log('DOM 加载完成');
-  initializeSiteConfigs();
-  initializeI18n();
-  initializeRuleInfo();
-  initializePromptTemplates();
-  initializePromptPrefixSettings();
-});
 
 // 显示消息
 function showMessage(message, isError = false) {
@@ -271,43 +261,54 @@ async function initializeSiteConfigs() {
       addDragFunctionality(siteDiv, site.name, 'collection');
     });
 
+    // 串行队列，保证用户快速连续切换多个站点时数据不被并发覆盖
+    let siteSettingsQueue = Promise.resolve();
+
     // 7. 添加切换事件监听器
     document.querySelectorAll('.enable-toggle').forEach(toggle => {
-      toggle.addEventListener('change', async function() {
-        try {
-          const siteName = this.closest('.site-config').querySelector('.site-name-display').textContent;
-          
-          // 获取当前的用户设置
-          const { siteSettings = {}, sites: userSiteSettings = {} } = await chrome.storage.sync.get(['siteSettings', 'sites']);
-          
-          // 更新用户设置
-          siteSettings[siteName] = this.checked;
-          
-          // 更新用户站点设置
-          if (!userSiteSettings[siteName]) {
-            userSiteSettings[siteName] = {};
-          }
-          userSiteSettings[siteName].enabled = this.checked;
-          
-          // 保存用户设置到 sync storage
-          await chrome.storage.sync.set({ 
-            siteSettings,
-            sites: userSiteSettings
-          });
-          
-          console.log('保存的站点设置:', siteName, this.checked);
+      toggle.addEventListener('change', function() {
+        const checkbox = this;
+        const siteConfigElement = checkbox.closest('.site-config');
+        const siteName = (siteConfigElement.getAttribute('data-site-name') || 
+                          siteConfigElement.querySelector('.site-name-display')?.textContent || '').trim();
+        
+        if (!siteName) return;
+        const isChecked = checkbox.checked;
 
-          if (chrome.runtime.lastError) {
-            showToast(chrome.i18n.getMessage("saveFailed", [chrome.runtime.lastError.message]));
-            return;
+        siteSettingsQueue = siteSettingsQueue.then(async () => {
+          try {
+            // 获取最新存储的用户设置
+            const { siteSettings = {}, sites: userSiteSettings = {} } = await chrome.storage.sync.get(['siteSettings', 'sites']);
+            
+            // 更新用户设置
+            siteSettings[siteName] = isChecked;
+            
+            if (!userSiteSettings[siteName]) {
+              userSiteSettings[siteName] = {};
+            }
+            userSiteSettings[siteName].enabled = isChecked;
+            
+            // 保存用户设置到 sync storage
+            await chrome.storage.sync.set({ 
+              siteSettings,
+              sites: userSiteSettings
+            });
+            
+            console.log('成功持久化保存站点设置:', siteName, isChecked);
+
+            if (chrome.runtime.lastError) {
+              showToast(chrome.i18n.getMessage("saveFailed", [chrome.runtime.lastError.message]));
+              checkbox.checked = !isChecked;
+              return;
+            }
+            showToast(chrome.i18n.getMessage("saveSuccess"));
+          } catch (error) {
+            console.error('保存设置失败:', error);
+            showToast('保存失败');
+            // 恢复复选框状态
+            checkbox.checked = !isChecked;
           }
-          showToast(chrome.i18n.getMessage("saveSuccess"));
-        } catch (error) {
-          console.error('保存设置失败:', error);
-          showToast('保存失败');
-          // 恢复复选框状态
-          this.checked = !this.checked;
-        }
+        });
       });
     });
 
@@ -317,11 +318,13 @@ async function initializeSiteConfigs() {
   }
 } 
 
-// 在页面加载时初始化
-document.addEventListener('DOMContentLoaded', function() {
+// 在页面加载时统一按序初始化
+document.addEventListener('DOMContentLoaded', async function() {
   initializeI18n();
-  loadConfig();
   initializeNavigation();
+  await loadConfig();
+  initializeRuleInfo();
+  initializePromptTemplates();
   initializeDisabledSites();
   initializePromptPrefixSettings();
 });
